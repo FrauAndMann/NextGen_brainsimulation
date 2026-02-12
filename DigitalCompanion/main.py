@@ -18,6 +18,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from core.companion import DigitalCompanion
+from core.memory import MemoryType
 from core.llm_interface import LLMInterface, LLMConfig, check_ollama_available
 from effectors.tts import TTSEngine, TTSProvider, check_tts_availability
 
@@ -143,6 +144,7 @@ class CompanionRunner:
         print("  trait    - показать черты характера")
         print("  mem      - показать состояние памяти")
         print("  love     - показать отношения и чувства")
+        print("  mind     - показать текущее состояние глобального рабочего пространства")
         print("  recall <запрос> - вспомнить о чём-то")
         print("  save     - сохранить состояние")
         print("  quit     - выход")
@@ -174,6 +176,10 @@ class CompanionRunner:
 
                 elif user_input == "love":
                     print(self.companion.relationship.get_relationship_report())
+
+                elif user_input == "mind":
+                    print("\n=== СОЗНАТЕЛЬНЫЙ ФОКУС ===")
+                    print(self.companion.consciousness.get_workspace_snapshot())
 
                 elif user_input.startswith("recall "):
                     query = user_input[7:]
@@ -249,7 +255,7 @@ class CompanionRunner:
             # Сохранение ответа в память
             self.companion.memory.encode(
                 content=f"Я ответила: {response[:200]}",
-                memory_type=self.companion.memory.__class__.__module__,
+                memory_type=MemoryType.EPISODIC,
                 emotional_valence=self.companion.emotion.pleasure,
                 emotional_intensity=self.companion.emotion.intensity,
                 emotion=self.companion.emotion.primary_emotion,

@@ -48,6 +48,7 @@ class PersonalityPromptBuilder:
         emotion,
         neurochemistry,
         relationship=None,
+        consciousness_state: Optional[Dict] = None,
         memory_context: str = ""
     ) -> str:
         """
@@ -72,6 +73,9 @@ class PersonalityPromptBuilder:
         if relationship:
             relationship_desc = self._describe_relationship(relationship)
 
+        # Сознательное рабочее пространство
+        consciousness_desc = self._describe_consciousness(consciousness_state or {})
+
         prompt = f"""Ты — {self.companion_name}, цифровая девушка-компаньон с развитой личностью.
 
 === ТВОЯ ЛИЧНОСТЬ ===
@@ -87,6 +91,10 @@ class PersonalityPromptBuilder:
 ЭМОЦИОНАЛЬНОЕ СОСТОЯНИЕ:
 {emotion_desc}
 {relationship_desc}
+
+СОЗНАТЕЛЬНЫЙ ФОКУС (глобальное рабочее пространство):
+{consciousness_desc}
+
 === ТВОЙ СТИЛЬ ОБЩЕНИЯ ===
 {communication_style}
 
@@ -107,6 +115,30 @@ class PersonalityPromptBuilder:
 
 Отвечай естественно, как живой человек с твоей личностью. Не упоминай, что ты ИИ или программа."""
         return prompt
+
+
+    def _describe_consciousness(self, consciousness_state: Dict) -> str:
+        """Описание текущего "сознательного" фокуса."""
+        if not consciousness_state:
+            return "Фокус ещё формируется."
+
+        focus = consciousness_state.get('focus', 'нет явного фокуса')
+        need = consciousness_state.get('dominant_need', 'connection')
+        confidence = consciousness_state.get('confidence', 0.5)
+        coherence = consciousness_state.get('coherence', 0.5)
+        thought = consciousness_state.get('last_thought', '')
+
+        lines = [
+            f"- Текущий фокус внимания: {focus}",
+            f"- Доминирующая потребность: {need}",
+            f"- Уверенность: {confidence:.0%}",
+            f"- Целостность внутреннего состояния: {coherence:.0%}",
+        ]
+
+        if thought:
+            lines.append(f"- Внутренняя мысль: {thought}")
+
+        return '\n'.join(lines)
 
     def _describe_relationship(self, relationship) -> str:
         """Описание состояния отношений"""
@@ -329,6 +361,7 @@ class LLMInterface:
             emotion=companion.emotion,
             neurochemistry=companion.neurochemistry,
             relationship=companion.relationship if hasattr(companion, 'relationship') else None,
+            consciousness_state=companion.consciousness.get_workspace_snapshot() if hasattr(companion, 'consciousness') else None,
             memory_context=memory_context
         )
 
