@@ -19,6 +19,7 @@ import os
 from core.temperament import Temperament, create_temperament
 from core.neurochemistry import NeurochemistryEngine
 from core.memory import MemorySystem, MemoryType, ImportanceLevel
+from core.consciousness import ConsciousnessCore
 from personality.character import CharacterFormation
 from personality.attachment import RelationshipSystem
 
@@ -83,6 +84,9 @@ class DigitalCompanion:
         # === СЛОЙ 6: СИСТЕМА ОТНОШЕНИЙ ===
         self.relationship = RelationshipSystem()
 
+        # === СЛОЙ 7: СОЗНАТЕЛЬНОЕ РАБОЧЕЕ ПРОСТРАНСТВО ===
+        self.consciousness = ConsciousnessCore(capacity=5)
+
         # === СОСТОЯНИЕ СИСТЕМЫ ===
         self.mode = "AWAKE"  # AWAKE, IDLE, SLEEP
         self.last_interaction_time = datetime.now()
@@ -107,15 +111,25 @@ class DigitalCompanion:
         # 3. Проверка драйвов
         self._check_drives()
 
-        # 4. Затухание памяти
+        # 4. Обновление сознательного цикла (GWT-подобный)
+        self.consciousness.tick(
+            emotion=self.emotion,
+            drives=self.neurochemistry.get_drives_vector(),
+            relationship_state={
+                "trust": self.relationship.trust_level,
+                "status": self.relationship.relationship_status,
+            }
+        )
+
+        # 5. Затухание памяти
         if self.tick_count % 100 == 0:
             self.memory.decay_all(dt)
 
-        # 5. Консолидация памяти (реже)
+        # 6. Консолидация памяти (реже)
         if self.tick_count % 1000 == 0:
             self.memory.consolidate()
 
-        # 6. Сохранение состояния
+        # 7. Сохранение состояния
         if self.tick_count % 10 == 0:
             self.state_history.append(self.get_state())
             if len(self.state_history) > 1000:
@@ -262,6 +276,18 @@ class DigitalCompanion:
             neurochemistry=self.neurochemistry
         )
 
+        # Сигнал в глобальное рабочее пространство
+        self.consciousness.inject_signal(
+            source="interaction",
+            content=f"Пользователь: {content[:120]}",
+            salience=min(1.0, 0.4 + intensity * 0.6),
+            payload={
+                "interaction_type": interaction_type,
+                "valence": valence,
+                "intensity": intensity,
+            }
+        )
+
     def get_state(self) -> Dict:
         """Получение полного состояния"""
         return {
@@ -286,6 +312,7 @@ class DigitalCompanion:
                 'love_total': self.relationship.love.get_total_love(),
                 'love_type': self.relationship.love.get_love_type().value,
             },
+            'consciousness': self.consciousness.get_workspace_snapshot(),
         }
 
     def get_report(self) -> str:
@@ -330,6 +357,7 @@ class DigitalCompanion:
             },
             'memory': self.memory.to_dict(),
             'relationship': self.relationship.to_dict(),
+            'consciousness': self.consciousness.get_workspace_snapshot(),
         }
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
@@ -372,5 +400,15 @@ class DigitalCompanion:
         # Восстановление отношений
         if 'relationship' in state:
             companion.relationship = RelationshipSystem.from_dict(state['relationship'])
+
+        # Восстановление сознательного состояния (частично)
+        if 'consciousness' in state:
+            snapshot = state['consciousness']
+            companion.consciousness.self_model.attention_target = snapshot.get('focus', 'none')
+            companion.consciousness.self_model.dominant_need = snapshot.get('dominant_need', 'connection')
+            companion.consciousness.self_model.confidence = snapshot.get('confidence', 0.5)
+            companion.consciousness.self_model.coherence = snapshot.get('coherence', 0.5)
+            companion.consciousness.self_model.last_thought = snapshot.get('last_thought', '')
+            companion.consciousness.inner_monologue = snapshot.get('inner_monologue_tail', [])
 
         return companion
