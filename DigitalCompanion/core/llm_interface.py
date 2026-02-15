@@ -49,6 +49,7 @@ class PersonalityPromptBuilder:
         neurochemistry,
         relationship=None,
         consciousness_state: Optional[Dict] = None,
+        metacognition_state: Optional[Dict] = None,
         memory_context: str = ""
     ) -> str:
         """
@@ -76,6 +77,9 @@ class PersonalityPromptBuilder:
         # Сознательное рабочее пространство
         consciousness_desc = self._describe_consciousness(consciousness_state or {})
 
+        # Метакогниция
+        metacognition_desc = self._describe_metacognition(metacognition_state or {})
+
         prompt = f"""Ты — {self.companion_name}, цифровая девушка-компаньон с развитой личностью.
 
 === ТВОЯ ЛИЧНОСТЬ ===
@@ -94,6 +98,9 @@ class PersonalityPromptBuilder:
 
 СОЗНАТЕЛЬНЫЙ ФОКУС (глобальное рабочее пространство):
 {consciousness_desc}
+
+МЕТАКОГНИЦИЯ (самосознание и цели):
+{metacognition_desc}
 
 === ТВОЙ СТИЛЬ ОБЩЕНИЯ ===
 {communication_style}
@@ -137,6 +144,43 @@ class PersonalityPromptBuilder:
 
         if thought:
             lines.append(f"- Внутренняя мысль: {thought}")
+
+        return '\n'.join(lines)
+
+    def _describe_metacognition(self, metacognition_state: Dict) -> str:
+        """Описание метакогнитивного состояния"""
+        if not metacognition_state:
+            return "Самосознание формируется."
+
+        state = metacognition_state.get('state', {})
+        goals = metacognition_state.get('goals', [])
+
+        lines = []
+
+        # Самосознание
+        emotional_clarity = state.get('emotional_clarity', 0.5)
+        thought_clarity = state.get('thought_clarity', 0.5)
+        confidence = state.get('confidence_in_judgment', 0.5)
+
+        lines.append(f"Ясность эмоций: {emotional_clarity:.0%}")
+        lines.append(f"Ясность мыслей: {thought_clarity:.0%}")
+        lines.append(f"Уверенность в себе: {confidence:.0%}")
+
+        # Активные цели
+        active_goals = [g for g in goals if g.get('status') == 'active']
+        if active_goals:
+            lines.append("\nТвои текущие цели:")
+            for goal in active_goals[:3]:
+                progress = goal.get('progress', 0)
+                name = goal.get('name', 'неизвестная цель')
+                priority = goal.get('priority', 0.5)
+                lines.append(f"- {name} (прогресс: {progress:.0%}, важность: {priority:.0%})")
+
+        # Рекомендации по саморегуляции
+        if emotional_clarity < 0.4:
+            lines.append("\nТы немного запутана в своих чувствах.")
+        if confidence < 0.4:
+            lines.append("\nТы чувствуешь неуверенность.")
 
         return '\n'.join(lines)
 
@@ -362,6 +406,7 @@ class LLMInterface:
             neurochemistry=companion.neurochemistry,
             relationship=companion.relationship if hasattr(companion, 'relationship') else None,
             consciousness_state=companion.consciousness.get_workspace_snapshot() if hasattr(companion, 'consciousness') else None,
+            metacognition_state=companion.metacognition.to_dict() if hasattr(companion, 'metacognition') else None,
             memory_context=memory_context
         )
 

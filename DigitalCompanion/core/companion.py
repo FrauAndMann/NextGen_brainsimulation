@@ -20,6 +20,7 @@ from core.temperament import Temperament, create_temperament
 from core.neurochemistry import NeurochemistryEngine
 from core.memory import MemorySystem, MemoryType, ImportanceLevel
 from core.consciousness import ConsciousnessCore
+from core.metacognition import MetacognitionEngine, GoalType, GoalStatus
 from personality.character import CharacterFormation
 from personality.attachment import RelationshipSystem
 
@@ -87,6 +88,9 @@ class DigitalCompanion:
         # === СЛОЙ 7: СОЗНАТЕЛЬНОЕ РАБОЧЕЕ ПРОСТРАНСТВО ===
         self.consciousness = ConsciousnessCore(capacity=5)
 
+        # === СЛОЙ 8: МЕТАКОГНИЦИЯ ===
+        self.metacognition = MetacognitionEngine()
+
         # === СОСТОЯНИЕ СИСТЕМЫ ===
         self.mode = "AWAKE"  # AWAKE, IDLE, SLEEP
         self.last_interaction_time = datetime.now()
@@ -120,6 +124,10 @@ class DigitalCompanion:
                 "status": self.relationship.relationship_status,
             }
         )
+
+        # 4.5. Метакогнитивный цикл (каждые 10 тиков)
+        if self.tick_count % 10 == 0:
+            self._run_metacognition(dt)
 
         # 5. Затухание памяти
         if self.tick_count % 100 == 0:
@@ -209,6 +217,51 @@ class DigitalCompanion:
             # Нужна стимуляция
             pass
 
+    def _run_metacognition(self, dt: float):
+        """Метакогнитивный цикл"""
+        current_state = self.get_state()
+
+        # Саморефлексия
+        reflection = self.metacognition.reflect(current_state)
+
+        # Обновление целей
+        self.metacognition.update_goals(current_state)
+
+        # Валидация предсказаний
+        validations = self.metacognition.validate_predictions(current_state)
+
+        # Генерация новых предсказаний (реже)
+        if self.tick_count % 100 == 0:
+            self.metacognition.predict(current_state)
+
+        # Автоматические цели на основе состояния
+        self._check_automatic_goals()
+
+    def _check_automatic_goals(self):
+        """Проверка и создание автоматических целей"""
+        active_goals = self.metacognition.get_active_goals()
+        active_names = {g.name for g in active_goals}
+
+        # Цель: развитие отношений (если любви недостаточно)
+        love_level = self.relationship.love.get_total_love()
+        if love_level > 0.2 and 'развить отношения' not in active_names:
+            self.metacognition.set_goal(
+                name='развить отношения',
+                goal_type=GoalType.RELATIONAL,
+                target_state={'love_total': min(1.0, love_level + 0.2)},
+                priority=0.6
+            )
+
+        # Цель: эмоциональное равновесие (если стресс высок)
+        cortisol = self.neurochemistry.get_main_state().get('cortisol', 0.5)
+        if cortisol > 0.6 and 'снизить стресс' not in active_names:
+            self.metacognition.set_goal(
+                name='снизить стресс',
+                goal_type=GoalType.EMOTIONAL,
+                target_state={'cortisol': 0.4},
+                priority=0.7
+            )
+
     def process_interaction(
         self,
         interaction_type: str,
@@ -288,6 +341,30 @@ class DigitalCompanion:
             }
         )
 
+        # Метакогнитивная оценка события (Appraisal)
+        appraisal = self.metacognition.appraise_event(
+            event_description=content,
+            event_context={
+                'valence': valence,
+                'intensity': intensity,
+                'interaction_type': interaction_type,
+                'neurochemistry': self.neurochemistry.get_main_state(),
+            }
+        )
+
+        # Обновление целей на основе взаимодействия
+        self._update_goals_from_interaction(interaction_type, valence, intensity)
+
+    def _update_goals_from_interaction(self, interaction_type: str, valence: float, intensity: float):
+        """Обновление целей на основе взаимодействия"""
+        active_goals = self.metacognition.get_active_goals()
+
+        # Позитивное взаимодействие продвигает цель отношений
+        if interaction_type == 'affection_shown' and valence > 0:
+            for goal in active_goals:
+                if 'отношения' in goal.name.lower() or 'любовь' in goal.name.lower():
+                    goal.progress = min(1.0, goal.progress + 0.1)
+
     def get_state(self) -> Dict:
         """Получение полного состояния"""
         return {
@@ -313,6 +390,7 @@ class DigitalCompanion:
                 'love_type': self.relationship.love.get_love_type().value,
             },
             'consciousness': self.consciousness.get_workspace_snapshot(),
+            'metacognition': self.metacognition.to_dict(),
         }
 
     def get_report(self) -> str:
@@ -337,6 +415,8 @@ class DigitalCompanion:
             self.memory.get_memory_summary(),
             "",
             self.relationship.get_relationship_report(),
+            "",
+            self.metacognition.get_metacognitive_report(),
         ]
         return '\n'.join(lines)
 
@@ -358,6 +438,7 @@ class DigitalCompanion:
             'memory': self.memory.to_dict(),
             'relationship': self.relationship.to_dict(),
             'consciousness': self.consciousness.get_workspace_snapshot(),
+            'metacognition': self.metacognition.to_dict(),
         }
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
@@ -410,5 +491,9 @@ class DigitalCompanion:
             companion.consciousness.self_model.coherence = snapshot.get('coherence', 0.5)
             companion.consciousness.self_model.last_thought = snapshot.get('last_thought', '')
             companion.consciousness.inner_monologue = snapshot.get('inner_monologue_tail', [])
+
+        # Восстановление метакогниции
+        if 'metacognition' in state:
+            companion.metacognition = MetacognitionEngine.from_dict(state['metacognition'])
 
         return companion
