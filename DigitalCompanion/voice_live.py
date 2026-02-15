@@ -17,8 +17,6 @@ import sys
 import time
 import threading
 import queue
-import tempfile
-import wave
 import asyncio
 from typing import Optional, Callable, Dict, Any, Tuple
 from dataclasses import dataclass, field
@@ -26,7 +24,7 @@ from enum import Enum
 import numpy as np
 
 # Импорты ANIMA
-from sensors.speech import SpeechToText, VoiceAnalysis, STTProvider
+from sensors.speech import SpeechToText, VoiceAnalysis, STTProvider, check_stt_availability
 from effectors.tts import TTSEngine, TTSProvider
 
 
@@ -313,8 +311,8 @@ class VoiceInterface:
         self.on_state_change = on_state_change
         self.continuous = continuous
 
-        # Компоненты
-        self.stt = SpeechToText(provider=STTProvider.WHISPER)
+        # Компоненты - автоматически выбираем лучший провайдер
+        self.stt = SpeechToText()  # Автовыбор: Whisper (если есть ffmpeg) -> Google
         self.tts = EmotionalTTS()
         self.vad = VoiceActivityDetector()
 
@@ -425,27 +423,8 @@ class VoiceInterface:
             # Объединение буфера
             audio_data = np.concatenate(audio_buffer)
 
-            # Конвертация в int16
-            audio_int16 = (audio_data * 32767).astype(np.int16)
-
-            # Сохранение во временный файл
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                temp_path = f.name
-
-            with wave.open(temp_path, "wb") as wf:
-                wf.setnchannels(self.channels)
-                wf.setsampwidth(2)
-                wf.setframerate(self.sample_rate)
-                wf.writeframes(audio_int16.tobytes())
-
-            # Распознавание
-            result = self.stt.transcribe(audio_file=temp_path)
-
-            # Удаление временного файла
-            try:
-                os.unlink(temp_path)
-            except:
-                pass
+            # Распознавание (Google работает напрямую с numpy array)
+            result = self.stt.transcribe(audio_data=audio_data)
 
             if result.text.strip():
                 # Анализ эмоций
