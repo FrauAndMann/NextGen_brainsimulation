@@ -2,7 +2,6 @@
 chcp 65001 >nul
 title Лиза - Живой Цифровой Компаньон
 
-:: Цвета (если поддерживаются)
 color 0B
 
 echo.
@@ -12,13 +11,9 @@ echo ║                       v2.0                                 ║
 echo ╚════════════════════════════════════════════════════════════╝
 echo.
 
-:: Переход в директорию скрипта
 cd /d "%~dp0"
 
-:: Быстрая проверка
-echo Проверка системы...
-
-:: Python
+:: Проверка Python
 python --version >nul 2>&1
 if errorlevel 1 (
     echo [X] Python не найден! Запустите setup_all.bat
@@ -26,19 +21,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Ollama
+:: Проверка Ollama (только проверка, не запуск)
 curl -s http://localhost:11434/api/tags >nul 2>&1
 if errorlevel 1 (
-    echo [!] Ollama не запущена, запускаю...
-    start /min ollama serve
-    timeout /t 3 >nul
-)
-
-:: ffmpeg
-ffmpeg -version >nul 2>&1
-if errorlevel 1 (
-    echo [!] ffmpeg не найден - распознавание речи может не работать
-    echo     Запустите setup_all.bat для установки
+    echo [X] Ollama не отвечает! Запустите: ollama serve
+    pause
+    exit /b 1
 )
 
 echo [OK] Система готова
@@ -50,7 +38,7 @@ echo   [1] Голосовой режим        - Говорите с Лизой
 echo   [2] Текстовый чат          - Пишите сообщения
 echo   [3] Голосовой + Камера     - Лиза видит ваши эмоции
 echo   [4] Демо аватара          - Посмотреть эмоции
-echo   [5] Настройка/Установка    - Установить зависимости
+echo   [5] Установка зависимостей
 echo   [Q] Выход
 echo ══════════════════════════════════════════════════════════════
 echo.
@@ -64,18 +52,13 @@ if /i "%choice%"=="3" goto camera
 if /i "%choice%"=="4" goto demo
 if /i "%choice%"=="5" goto setup
 if /i "%choice%"=="q" goto end
-if /i "%choice%"=="й" goto voice
-if /i "%choice%"=="ц" goto chat
-if /i "%choice%"=="ы" goto camera
-if /i "%choice%"=="в" goto demo
-if /i "%choice%"=="й" goto end
 
 :voice
 echo.
 echo ══════════════════════════════════════════════════════════════
 echo   ГОЛОСОВОЙ РЕЖИМ
 echo   Говорите с Лизой - она слышит и отвечает голосом
-echo   Нажмите Ctrl+C для выхода
+echo   Ctrl+C для выхода
 echo ══════════════════════════════════════════════════════════════
 echo.
 python live_liza.py --mode voice
