@@ -1,56 +1,56 @@
 @echo off
-chcp 65001 >nul
-title ANIMA - Установка зависимостей
+chcp 65001 >nul 2>&1
+chcp 1251 >nul 2>&1
+title ANIMA - Setup
 
 echo.
-echo ╔════════════════════════════════════════════════════════════╗
-echo ║         ANIMA v2.0 - Установка зависимостей                ║
-echo ║         Живой Цифровой Компаньон Лиза                      ║
-echo ╚════════════════════════════════════════════════════════════╝
+echo ====================================================
+echo         ANIMA v2.0 - Installing dependencies
+echo ====================================================
 echo.
 
-:: Проверка Python
-echo [1/5] Проверка Python...
+:: Check Python
+echo [1/5] Checking Python...
 python --version >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo [ОШИБКА] Python не установлен!
-    echo Скачайте Python 3.10+ с https://python.org
+    echo [ERROR] Python not installed!
+    echo Download Python 3.10+ from https://python.org
     start "" "https://www.python.org/downloads/"
     pause
     exit /b 1
 )
 python --version
-echo         OK!
+echo        OK!
 
-:: Проверка pip
-echo [2/5] Обновление pip...
+:: Check pip
+echo [2/5] Updating pip...
 python -m pip install --upgrade pip --quiet 2>nul
-echo         OK!
+echo        OK!
 
-:: Установка ffmpeg
-echo [3/5] Проверка ffmpeg...
+:: Install ffmpeg
+echo [3/5] Checking ffmpeg...
 ffmpeg -version >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo ffmpeg не найден. Устанавливаю...
+    echo ffmpeg not found. Installing...
     winget install --id Gyan.FFmpeg -e --accept-source-agreements --accept-package-agreements >nul 2>&1
     if errorlevel 1 (
         echo.
-        echo [ВАЖНО] Не удалось установить ffmpeg автоматически!
-        echo Скачайте с https://www.gyan.dev/ffmpeg/builds/
-        echo Распакуйте в C:\ffmpeg и добавьте C:\ffmpeg\bin в PATH
+        echo [WARNING] Could not install ffmpeg automatically!
+        echo Download from https://www.gyan.dev/ffmpeg/builds/
+        echo Extract to C:\ffmpeg and add C:\ffmpeg\bin to PATH
         echo.
         start "" "https://www.gyan.dev/ffmpeg/builds/"
         pause
     )
 ) else (
-    echo         OK!
+    echo        OK!
 )
 
-:: Установка Python пакетов
-echo [4/5] Установка Python пакетов...
-echo         (это займёт минуту)
+:: Install Python packages
+echo [4/5] Installing Python packages...
+echo        (this may take a minute)
 
 pip install numpy requests edge-tts --quiet 2>nul
 pip install sounddevice soundfile --quiet 2>nul
@@ -59,25 +59,25 @@ pip install openai --quiet 2>nul
 pip install customtkinter --quiet 2>nul
 pip install opencv-python --quiet 2>nul
 
-echo         OK!
+echo        OK!
 
-:: Проверка связи с Ollama (уже должно быть запущено)
-echo [5/5] Проверка Ollama...
+:: Check Ollama connection
+echo [5/5] Checking Ollama...
 curl -s http://localhost:11434/api/tags >nul 2>&1
 if errorlevel 1 (
     echo.
-    echo [ВНИМАНИЕ] Ollama не отвечает на localhost:11434
-    echo Убедитесь что Ollama запущена: ollama serve
+    echo [WARNING] Ollama not responding on localhost:11434
+    echo Make sure Ollama is running: ollama serve
     echo.
 ) else (
-    echo         OK! Сервер найден.
+    echo        OK! Server found.
 )
 
 echo.
-echo ╔════════════════════════════════════════════════════════════╗
-echo ║                 УСТАНОВКА ЗАВЕРШЕНА!                       ║
-echo ╚════════════════════════════════════════════════════════════╝
+echo ====================================================
+echo               INSTALLATION COMPLETE!
+echo ====================================================
 echo.
-echo Теперь запустите run_liza.bat
+echo Now run run_liza.bat
 echo.
 pause
