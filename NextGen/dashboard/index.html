@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SYNAPSE Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DM Sans', sans-serif; background: #060A12; color: white; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+        const { LineChart, Line, AreaChart, Area, ResponsiveContainer, Tooltip } = Recharts;
+
+        // ── Configuration ───────────────────────────────────────────────────
+        const API_URL = "http://localhost:8000";
+        const WS_URL = "ws://localhost:8000/ws";
+
+        const POPULATIONS = [
+            { id: "sensory", label: "Sensory Input", color: "#4ECDC4", short: "SEN" },
+            { id: "pred_l1", label: "Prediction L1", color: "#45B7D1", short: "PL1" },
+            { id: "assoc", label: "Association", color: "#96CEB4", short: "ASC" },
+            { id: "pfc", label: "Prefrontal", color: "#FFEAA7", short: "PFC" },
+            { id: "hippo", label: "Hippocampus", color: "#DDA0DD", short: "HPC" },
+            { id: "amygdala", label: "Amygdala", color: "#FF6B9D", short: "AMY" },
+            { id: "selfmodel", label: "Self-Model", color: "#A8E6CF", short: "SLF" },
+            { id: "gw_hub", label: "Global Workspace", color: "#FFD93D", short: "GWS" },
+        ];
+
+        const NEURO = [
+            { id: "dopamine", label: "Дофамин", color: "#FFD93D", base: 0.45 },
+            { id: "serotonin", label: "Серотонин", color: "#4ECDC4", base: 0.55 },
+            { id: "norepinephrine", label: "Норадреналин", color: "#FF6B9D", base: 0.35 },
+            { id: "oxytocin", label: "Окситоцин", color: "#A8E6CF", base: 0.40 },
+            { id: "cortisol", label: "Кортизол", color: "#FF8C42", base: 0.25 },
+        ];
+
+        // ── API Functions ─────────────────────────────────────────────────────
+        async function fetchAPI(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${API_URL}${endpoint}`, options);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                console.error(`API Error (${endpoint}):`, error);
+                return null;
+            }
+        }
+
+        // ── Components ───────────────────────────────────────────────────────
+
+        function ConnectionStatus({ connected }) {
+            return (
+                <div style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "4px 12px", borderRadius: 20,
+                    background: connected ? "rgba(78,205,196,0.15)" : "rgba(255,107,157,0.15)",
+                    border: `1px solid ${connected ? "rgba(78,205,196,0.3)" : "rgba(255,107,157,0.3)"}`,
+                }}>
+                    <div style={{
+                        width: 6, height: 6, borderRadius: "50%",
+                        background: connected ? "#4ECDC4" : "#FF6B9D",
+                        boxShadow: `0 0 8px ${connected ? "#4ECDC4" : "#FF6B9D"}`,
+                        animation: "pulse 1.5s infinite",
+                    }} />
+                    <span style={{ fontSize: 10, color: connected ? "#4ECDC4" : "#FF6B9D", fontFamily: "monospace" }}>
+                        {connected ? "CONNECTED" : "DISCONNECTED"}
+                    </span>
+                </div>
+            );
+        }
+
+        function MetricCard({ label, value, color, suffix = "" }) {
+            return (
+                <div style={{
+                    padding: "12px 14px",
+                    background: "rgba(255,255,255,0.03)",
+                    borderRadius: 8,
+                    border: `1px solid rgba(255,255,255,0.08)`,
+                }}>
+                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", fontFamily: "monospace", marginBottom: 4 }}>
+                        {label}
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 600, color, fontFamily: "monospace" }}>
+                        {typeof value === 'number' ? value.toFixed(3) : value}{suffix}
+                    </div>
+                </div>
+            );
+        }
+
+        function NeuroGauge({ label, value, color }) {
+            return (
+                <div style={{
+                    padding: "8px 10px",
+                    background: "rgba(255,255,255,0.03)",
+                    borderRadius: 8,
+                    border: `1px solid rgba(255,255,255,0.08)`,
+                }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "monospace" }}>{label}</span>
+                        <span style={{ fontSize: 11, color, fontFamily: "monospace", fontWeight: 600 }}>
+                            {(value * 100).toFixed(0)}%
+                        </span>
+                    </div>
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{
+                            height: "100%", width: `${value * 100}%",
+                            background: `linear-gradient(90deg, ${color}88, ${color})`,
+                            borderRadius: 2, transition: "width 0.3s ease",
+                            boxShadow: `0 0 6px ${color}`,
+                        }} />
+                    </div>
+                </div>
+            );
+        }
+
+        function PopBar({ pop, value, isWinner }) {
+            return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+                    <div style={{
+                        width: 3, height: 16, borderRadius: 2,
+                        background: isWinner ? pop.color : "rgba(255,255,255,0.15)",
+                        boxShadow: isWinner ? `0 0 8px ${pop.color}` : "none",
+                        transition: "all 0.3s",
+                    }} />
+                    <span style={{
+                        fontSize: 9, width: 60,
+                        color: isWinner ? pop.color : "rgba(255,255,255,0.45)",
+                        fontFamily: "monospace", transition: "color 0.3s",
+                    }}>
+                        {pop.short}
+                    </span>
+                    <div style={{ flex: 1, height: 3, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{
+                            height: "100%", width: `${(value || 0) * 100}%`,
+                            background: isWinner ? pop.color : `${pop.color}55`,
+                            borderRadius: 2, transition: "width 0.3s ease",
+                        }} />
+                    </div>
+                </div>
+            );
+        }
+
+        function ChatMessage({ msg }) {
+            const isUser = msg.from === "user";
+            const time = new Date(msg.timestamp).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+            return (
+                <div style={{
+                    display: "flex", flexDirection: "column",
+                    alignItems: isUser ? "flex-end" : "flex-start",
+                    marginBottom: 10, animation: "fadeIn 0.3s ease",
+                }}>
+                    <div style={{
+                        maxWidth: "85%", padding: "10px 14px",
+                        borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                        background: isUser ? "linear-gradient(135deg, #1565C0, #0D47A1)" : "rgba(255,255,255,0.06)",
+                        border: isUser ? "none" : "1px solid rgba(255,255,255,0.08)",
+                        color: "rgba(255,255,255,0.88)", fontSize: 13, lineHeight: 1.5,
+                    }}>
+                        {msg.text}
+                    </div>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginTop: 3, fontFamily: "monospace" }}>
+                        {time}
+                    </span>
+                </div>
+            );
+        }
+
+        function CheckpointList({ checkpoints, onLoad }) {
+            return (
+                <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                    {checkpoints.length === 0 ? (
+                        <div style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
+                            Нет сохранённых чекпоинтов
+                        </div>
+                    ) : (
+                        checkpoints.map((ckpt, i) => (
+                            <div key={i} style={{
+                                display: "flex", justifyContent: "space-between", alignItems: "center",
+                                padding: "8px 10px", marginBottom: 4,
+                                background: "rgba(255,255,255,0.03)",
+                                borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)",
+                            }}>
+                                <div>
+                                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontFamily: "monospace" }}>
+                                        Epoch {ckpt.epoch}
+                                    </div>
+                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)" }}>
+                                        {new Date(ckpt.timestamp).toLocaleString("ru-RU")}
+                                    </div>
+                                </div>
+                                <button onClick={() => onLoad(ckpt.path)} style={{
+                                    padding: "4px 10px", borderRadius: 6,
+                                    background: "rgba(78,205,196,0.15)", border: "1px solid rgba(78,205,196,0.3)",
+                                    color: "#4ECDC4", fontSize: 10, cursor: "pointer",
+                                }}>
+                                    Load
+                                </button>
+                            </div>
+                        ))
+                    )}
+                </div>
+            );
+        }
+
+        // ── Main Dashboard ───────────────────────────────────────────────────
+
+        function SynapseDashboard() {
+            const [connected, setConnected] = useState(false);
+            const [metrics, setMetrics] = useState({
+                phi: 0.4, mean_agency: 0, integration_score: 0,
+                meta_confidence: 0, meta_uncertainty: 0, self_confidence: 0,
+            });
+            const [neurochemistry, setNeurochemistry] = useState(
+                Object.fromEntries(NEURO.map(n => [n.id, n.base]))
+            );
+            const [populations, setPopulations] = useState(
+                Object.fromEntries(POPULATIONS.map(p => [p.id, 0.5]))
+            );
+            const [neuroHistory, setNeuroHistory] = useState([]);
+            const [messages, setMessages] = useState([]);
+            const [input, setInput] = useState("");
+            const [stepCount, setStepCount] = useState(0);
+            const [checkpoints, setCheckpoints] = useState([]);
+
+            const chatRef = useRef();
+            const wsRef = useRef();
+
+            // WebSocket connection
+            useEffect(() => {
+                const connect = () => {
+                    wsRef.current = new WebSocket(WS_URL);
+
+                    wsRef.current.onopen = () => {
+                        setConnected(true);
+                        console.log("WebSocket connected");
+                    };
+
+                    wsRef.current.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        if (data.type === "step") {
+                            setMetrics(prev => ({ ...prev, ...data.data.metrics }));
+                            setNeurochemistry(data.data.neurochemistry || {});
+                            setPopulations(data.data.populations || {});
+                            setStepCount(data.data.step);
+
+                            // Update history
+                            setNeuroHistory(prev => {
+                                const newEntry = { t: prev.length, ...data.data.neurochemistry };
+                                return [...prev.slice(-100), newEntry];
+                            });
+                        }
+                    };
+
+                    wsRef.current.onclose = () => {
+                        setConnected(false);
+                        console.log("WebSocket disconnected, reconnecting...");
+                        setTimeout(connect, 2000);
+                    };
+
+                    wsRef.current.onerror = (error) => {
+                        console.error("WebSocket error:", error);
+                    };
+                };
+
+                connect();
+                return () => wsRef.current?.close();
+            }, []);
+
+            // Load initial data
+            useEffect(() => {
+                const loadData = async () => {
+                    const status = await fetchAPI("/api/status");
+                    if (status) setStepCount(status.step_count);
+
+                    const ckpts = await fetchAPI("/api/checkpoints");
+                    if (ckpts) setCheckpoints(ckpts);
+
+                    const chatHistory = await fetchAPI("/api/chat/history");
+                    if (chatHistory) setMessages(chatHistory);
+                };
+                loadData();
+            }, []);
+
+            // Scroll chat
+            useEffect(() => {
+                if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+            }, [messages]);
+
+            const sendMessage = async () => {
+                if (!input.trim()) return;
+                const userMsg = { from: "user", text: input, timestamp: new Date().toISOString() };
+                setMessages(prev => [...prev, userMsg]);
+                setInput("");
+
+                const response = await fetchAPI("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text: input }),
+                });
+
+                if (response) {
+                    setMessages(prev => [...prev, {
+                        from: "brain",
+                        text: response.response,
+                        timestamp: new Date().toISOString(),
+                    }]);
+                    if (response.metrics) setMetrics(prev => ({ ...prev, ...response.metrics }));
+                }
+            };
+
+            const saveCheckpoint = async () => {
+                const result = await fetchAPI("/api/checkpoint/save", { method: "POST" });
+                if (result) {
+                    const ckpts = await fetchAPI("/api/checkpoints");
+                    if (ckpts) setCheckpoints(ckpts);
+                    alert("Прогресс сохранён!");
+                }
+            };
+
+            const loadCheckpoint = async (path) => {
+                const result = await fetchAPI(`/api/checkpoint/load?path=${encodeURIComponent(path)}`, { method: "POST" });
+                if (result) {
+                    alert("Чекпоинт загружен!");
+                }
+            };
+
+            const resetModel = async () => {
+                if (confirm("Сбросить модель? История будет потеряна!")) {
+                    await fetchAPI("/api/reset", { method: "POST" });
+                    setMessages([]);
+                    setStepCount(0);
+                }
+            };
+
+            return (
+                <div style={{ minHeight: "100vh", background: "#060A12" }}>
+                    {/* Header */}
+                    <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        background: "rgba(6,10,18,0.9)", backdropFilter: "blur(10px)",
+                        position: "sticky", top: 0, zIndex: 100,
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                <div style={{
+                                    width: 8, height: 8, borderRadius: "50%",
+                                    background: "#4ECDC4", boxShadow: "0 0 10px #4ECDC4",
+                                    animation: "pulse 1.5s infinite",
+                                }} />
+                                <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.08em" }}>SYNAPSE</span>
+                            </div>
+                            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
+                            <span style={{ fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.3)" }}>
+                                Step: {stepCount}
+                            </span>
+                        </div>
+                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                            <ConnectionStatus connected={connected} />
+                        </div>
+                    </div>
+
+                    {/* Main Grid */}
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "260px 1fr 280px",
+                        gap: 1,
+                        height: "calc(100vh - 49px)",
+                    }}>
+                        {/* Left Panel: Populations & Metrics */}
+                        <div style={{
+                            borderRight: "1px solid rgba(255,255,255,0.05)",
+                            overflowY: "auto", padding: "14px 12px",
+                            display: "flex", flexDirection: "column", gap: 12,
+                        }}>
+                            <div>
+                                <div style={{
+                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
+                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 8,
+                                }}>
+                                    ПОПУЛЯЦИИ
+                                </div>
+                                {POPULATIONS.map(pop => (
+                                    <PopBar
+                                        key={pop.id}
+                                        pop={pop}
+                                        value={populations[pop.id]}
+                                        isWinner={populations[pop.id] === Math.max(...Object.values(populations))}
+                                    />
+                                ))}
+                            </div>
+
+                            <div style={{
+                                display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+                            }}>
+                                <MetricCard label="IIT Φ" value={metrics.phi} color="#FFD93D" />
+                                <MetricCard label="AGENCY" value={metrics.mean_agency} color="#A8E6CF" />
+                            </div>
+
+                            <MetricCard
+                                label="INTEGRATION SCORE"
+                                value={metrics.integration_score}
+                                color="#4ECDC4"
+                            />
+
+                            <div style={{
+                                display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+                            }}>
+                                <MetricCard label="CONFIDENCE" value={metrics.meta_confidence} color="#96CEB4" />
+                                <MetricCard label="UNCERTAINTY" value={metrics.meta_uncertainty} color="#FF8C42" />
+                            </div>
+                        </div>
+
+                        {/* Center: Charts */}
+                        <div style={{
+                            display: "flex", flexDirection: "column",
+                            borderRight: "1px solid rgba(255,255,255,0.05)",
+                            overflow: "hidden",
+                        }}>
+                            {/* Neuro History Chart */}
+                            <div style={{ flex: 1, padding: "14px" }}>
+                                <div style={{
+                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
+                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 8,
+                                }}>
+                                    НЕЙРОХИМИЯ · ИСТОРИЯ
+                                </div>
+                                <div style={{ height: "calc(100% - 28px)" }}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={neuroHistory} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                                            <Tooltip
+                                                contentStyle={{
+                                                    background: "rgba(6,10,18,0.95)",
+                                                    border: "1px solid rgba(255,255,255,0.1)",
+                                                    borderRadius: 8, fontSize: 10, fontFamily: "monospace",
+                                                }}
+                                                formatter={(v) => `${(v * 100).toFixed(0)}%`}
+                                            />
+                                            {NEURO.map(n => (
+                                                <Area
+                                                    key={n.id}
+                                                    type="monotone"
+                                                    dataKey={n.id}
+                                                    stroke={n.color}
+                                                    fill={`${n.color}11`}
+                                                    strokeWidth={1.5}
+                                                    dot={false}
+                                                />
+                                            ))}
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right: Neuro Gauges + Chat + Controls */}
+                        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                            {/* Neuro Gauges */}
+                            <div style={{
+                                padding: "12px", borderBottom: "1px solid rgba(255,255,255,0.05)",
+                                flex: "0 0 auto",
+                            }}>
+                                <div style={{
+                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
+                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 8,
+                                }}>
+                                    НЕЙРОМЕДИАТОРЫ
+                                </div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    {NEURO.map(n => (
+                                        <NeuroGauge
+                                            key={n.id}
+                                            label={n.label}
+                                            value={neurochemistry[n.id] || n.base}
+                                            color={n.color}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Controls */}
+                            <div style={{
+                                padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)",
+                                flex: "0 0 auto",
+                            }}>
+                                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                                    <button
+                                        onClick={saveCheckpoint}
+                                        style={{
+                                            flex: 1, padding: "8px 12px", borderRadius: 6,
+                                            background: "rgba(255,217,61,0.15)",
+                                            border: "1px solid rgba(255,217,61,0.3)",
+                                            color: "#FFD93D", fontSize: 10, cursor: "pointer",
+                                            fontFamily: "monospace",
+                                        }}
+                                    >
+                                        💾 SAVE
+                                    </button>
+                                    <button
+                                        onClick={resetModel}
+                                        style={{
+                                            flex: 1, padding: "8px 12px", borderRadius: 6,
+                                            background: "rgba(255,107,157,0.15)",
+                                            border: "1px solid rgba(255,107,157,0.3)",
+                                            color: "#FF6B9D", fontSize: 10, cursor: "pointer",
+                                            fontFamily: "monospace",
+                                        }}
+                                    >
+                                        🔄 RESET
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Checkpoints */}
+                            <div style={{
+                                padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)",
+                                flex: "0 0 auto", maxHeight: 150, overflowY: "auto",
+                            }}>
+                                <div style={{
+                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
+                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 6,
+                                }}>
+                                    ЧЕКПОИНТЫ ({checkpoints.length})
+                                </div>
+                                <CheckpointList checkpoints={checkpoints} onLoad={loadCheckpoint} />
+                            </div>
+
+                            {/* Chat */}
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+                                <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                    <span style={{
+                                        fontSize: 9, color: "rgba(255,255,255,0.3)",
+                                        fontFamily: "monospace", letterSpacing: "0.1em",
+                                    }}>
+                                        ЧАТ
+                                    </span>
+                                </div>
+
+                                <div
+                                    ref={chatRef}
+                                    style={{
+                                        flex: 1, overflowY: "auto", padding: "10px 12px",
+                                        display: "flex", flexDirection: "column", gap: 2,
+                                    }}
+                                >
+                                    {messages.length === 0 ? (
+                                        <div style={{
+                                            textAlign: "center", padding: 20,
+                                            color: "rgba(255,255,255,0.3)", fontSize: 12,
+                                        }}>
+                                            Начните диалог...
+                                        </div>
+                                    ) : (
+                                        messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)
+                                    )}
+                                </div>
+
+                                <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                                    <div style={{ display: "flex", gap: 8 }}>
+                                        <input
+                                            value={input}
+                                            onChange={e => setInput(e.target.value)}
+                                            onKeyDown={e => e.key === "Enter" && sendMessage()}
+                                            placeholder="Написать..."
+                                            style={{
+                                                flex: 1,
+                                                background: "rgba(255,255,255,0.05)",
+                                                border: "1px solid rgba(255,255,255,0.1)",
+                                                borderRadius: 8, padding: "8px 12px",
+                                                color: "white", fontSize: 13, outline: "none",
+                                            }}
+                                        />
+                                        <button
+                                            onClick={sendMessage}
+                                            style={{
+                                                width: 36, height: 36, borderRadius: 8,
+                                                background: "linear-gradient(135deg, #1565C0, #0D47A1)",
+                                                border: "none", color: "white", cursor: "pointer",
+                                            }}
+                                        >
+                                            →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Render
+        ReactDOM.createRoot(document.getElementById('root')).render(<SynapseDashboard />);
+    </script>
+</body>
+</html>
