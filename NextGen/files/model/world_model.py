@@ -111,3 +111,42 @@ class WorldModel(nn.Module):
         uncertainty = torch.exp(last_logvar).mean(dim=-1, keepdim=True)
 
         return predicted_obs, uncertainty
+
+    def compute_loss(self,
+                     observations: torch.Tensor,
+                     actions: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, dict]:
+        """
+        Training loss: reconstruction + KL divergence
+        """
+        batch_size, seq_len, _ = observations.shape
+
+        total_recon_loss = torch.tensor(0.0, device=observations.device)
+        total_kl_loss = torch.tensor(0.0, device=observations.device)
+
+        for t in range(1, seq_len):
+            past_obs = observations[:, :t]
+            target_obs = observations[:, t]
+
+            pred_obs, _ = self.predict_next(past_obs,
+                                            actions[:, :t] if actions is not None else None)
+
+            # Reconstruction loss
+            recon_loss = F.mse_loss(pred_obs, target_obs)
+            total_recon_loss = total_recon_loss + recon_loss
+
+            # KL divergence (for VAE)
+            mean, logvar = self.encode(target_obs)
+            kl_loss = -0.5 * torch.sum(1 + logvar - mean.pow(2) - logvar.exp())
+            total_kl_loss = total_kl_loss + kl_loss
+
+        # Average over sequence
+        total_recon_loss = total_recon_loss / (seq_len - 1)
+        total_kl_loss = total_kl_loss / (seq_len - 1)
+
+        # Total loss with KL weight
+        loss = total_recon_loss + 0.001 * total_kl_loss
+
+        return loss, {
+            'reconstruction_loss': total_recon_loss.item(),
+            'kl_loss': total_kl_loss.item()
+        }
