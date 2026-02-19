@@ -9,7 +9,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import Tuple, Dict, Optional
-from .config import EnvironmentConfig, NeurochemistryConfig
+try:
+    from .config import EnvironmentConfig, NeurochemistryConfig
+except ImportError:
+    from config import EnvironmentConfig, NeurochemistryConfig
 
 
 class NeurochemistryEngine:
