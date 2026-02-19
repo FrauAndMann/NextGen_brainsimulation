@@ -69,3 +69,45 @@ class WorldModel(nn.Module):
         z = self.reparameterize(mean, logvar)
         recon = self.decode(z)
         return recon, mean, logvar
+
+    def predict_next(self,
+                     past_observations: torch.Tensor,
+                     actions: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Predict next observation based on history
+
+        Args:
+            past_observations: [batch, seq_len, obs_dim]
+            actions: [batch, seq_len, action_dim] (optional)
+
+        Returns:
+            predicted_next_obs: [batch, obs_dim]
+            uncertainty: [batch, 1]
+        """
+        batch_size, seq_len, _ = past_observations.shape
+
+        # Encode all past observations
+        latents = []
+        logvars = []
+        for t in range(seq_len):
+            mean, logvar = self.encode(past_observations[:, t])
+            z = self.reparameterize(mean, logvar)
+            latents.append(z)
+            logvars.append(logvar)
+
+        latents = torch.stack(latents, dim=1)  # [batch, seq_len, latent_dim]
+
+        # Temporal prediction
+        context = self.temporal_model(latents)  # [batch, seq_len, latent_dim]
+
+        # Use last timestep to predict next
+        next_latent = context[:, -1, :]  # [batch, latent_dim]
+
+        # Decode to observation space
+        predicted_obs = self.decode(next_latent)
+
+        # Estimate uncertainty from latent variance
+        last_logvar = logvars[-1]
+        uncertainty = torch.exp(last_logvar).mean(dim=-1, keepdim=True)
+
+        return predicted_obs, uncertainty
