@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYNAPSE Dashboard</title>
+    <title>SYNAPSE Control Dashboard</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -17,202 +17,168 @@
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
     </style>
 </head>
 <body>
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useRef, useCallback } = React;
-        const { LineChart, Line, AreaChart, Area, ResponsiveContainer, Tooltip } = Recharts;
+        const { AreaChart, Area, ResponsiveContainer, Tooltip, LineChart, Line, XAxis, YAxis } = Recharts;
 
         // ── Configuration ───────────────────────────────────────────────────
         const API_URL = "http://localhost:8000";
         const WS_URL = "ws://localhost:8000/ws";
 
-        const POPULATIONS = [
-            { id: "sensory", label: "Sensory Input", color: "#4ECDC4", short: "SEN" },
-            { id: "pred_l1", label: "Prediction L1", color: "#45B7D1", short: "PL1" },
-            { id: "assoc", label: "Association", color: "#96CEB4", short: "ASC" },
-            { id: "pfc", label: "Prefrontal", color: "#FFEAA7", short: "PFC" },
-            { id: "hippo", label: "Hippocampus", color: "#DDA0DD", short: "HPC" },
-            { id: "amygdala", label: "Amygdala", color: "#FF6B9D", short: "AMY" },
-            { id: "selfmodel", label: "Self-Model", color: "#A8E6CF", short: "SLF" },
-            { id: "gw_hub", label: "Global Workspace", color: "#FFD93D", short: "GWS" },
-        ];
-
-        const NEURO = [
-            { id: "dopamine", label: "Дофамин", color: "#FFD93D", base: 0.45 },
-            { id: "serotonin", label: "Серотонин", color: "#4ECDC4", base: 0.55 },
-            { id: "norepinephrine", label: "Норадреналин", color: "#FF6B9D", base: 0.35 },
-            { id: "oxytocin", label: "Окситоцин", color: "#A8E6CF", base: 0.40 },
-            { id: "cortisol", label: "Кортизол", color: "#FF8C42", base: 0.25 },
-        ];
-
         // ── API Functions ─────────────────────────────────────────────────────
-        async function fetchAPI(endpoint, options = {}) {
+        async function api(endpoint, method = "GET", body = null) {
             try {
-                const response = await fetch(`${API_URL}${endpoint}`, options);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                return await response.json();
-            } catch (error) {
-                console.error(`API Error (${endpoint}):`, error);
+                const opts = { method, headers: { "Content-Type": "application/json" } };
+                if (body) opts.body = JSON.stringify(body);
+                const res = await fetch(`${API_URL}${endpoint}`, opts);
+                return await res.json();
+            } catch (e) {
+                console.error("API Error:", e);
                 return null;
             }
         }
 
         // ── Components ───────────────────────────────────────────────────────
 
-        function ConnectionStatus({ connected }) {
+        function StatusBadge({ state }) {
+            const colors = {
+                idle: { bg: "rgba(150,150,150,0.2)", border: "rgba(150,150,150,0.4)", color: "#999" },
+                running: { bg: "rgba(78,205,196,0.2)", border: "rgba(78,205,196,0.4)", color: "#4ECDC4" },
+                paused: { bg: "rgba(255,217,61,0.2)", border: "rgba(255,217,61,0.4)", color: "#FFD93D" },
+                stopping: { bg: "rgba(255,107,157,0.2)", border: "rgba(255,107,157,0.4)", color: "#FF6B9D" }
+            };
+            const c = colors[state] || colors.idle;
+
             return (
                 <div style={{
-                    display: "flex", alignItems: "center", gap: 6,
+                    display: "inline-flex", alignItems: "center", gap: 6,
                     padding: "4px 12px", borderRadius: 20,
-                    background: connected ? "rgba(78,205,196,0.15)" : "rgba(255,107,157,0.15)",
-                    border: `1px solid ${connected ? "rgba(78,205,196,0.3)" : "rgba(255,107,157,0.3)"}`,
+                    background: c.bg, border: `1px solid ${c.border}`,
                 }}>
                     <div style={{
                         width: 6, height: 6, borderRadius: "50%",
-                        background: connected ? "#4ECDC4" : "#FF6B9D",
-                        boxShadow: `0 0 8px ${connected ? "#4ECDC4" : "#FF6B9D"}`,
-                        animation: "pulse 1.5s infinite",
+                        background: c.color,
+                        boxShadow: `0 0 8px ${c.color}`,
+                        animation: state === "running" ? "pulse 1s infinite" : "none"
                     }} />
-                    <span style={{ fontSize: 10, color: connected ? "#4ECDC4" : "#FF6B9D", fontFamily: "monospace" }}>
-                        {connected ? "CONNECTED" : "DISCONNECTED"}
+                    <span style={{ fontSize: 11, color: c.color, fontFamily: "monospace" }}>
+                        {state.toUpperCase()}
                     </span>
                 </div>
             );
         }
 
-        function MetricCard({ label, value, color, suffix = "" }) {
+        function Button({ onClick, children, variant = "default", disabled, style }) {
+            const variants = {
+                default: { bg: "rgba(255,255,255,0.1)", border: "rgba(255,255,255,0.2)", color: "#fff" },
+                primary: { bg: "rgba(78,205,196,0.2)", border: "rgba(78,205,196,0.4)", color: "#4ECDC4" },
+                danger: { bg: "rgba(255,107,157,0.2)", border: "rgba(255,107,157,0.4)", color: "#FF6B9D" },
+                warning: { bg: "rgba(255,217,61,0.2)", border: "rgba(255,217,61,0.4)", color: "#FFD93D" },
+                success: { bg: "rgba(168,230,207,0.2)", border: "rgba(168,230,207,0.4)", color: "#A8E6CF" }
+            };
+            const v = variants[variant];
+
+            return (
+                <button
+                    onClick={onClick}
+                    disabled={disabled}
+                    style={{
+                        padding: "8px 16px", borderRadius: 8, border: `1px solid ${v.border}`,
+                        background: v.bg, color: v.color, cursor: disabled ? "not-allowed" : "pointer",
+                        fontFamily: "'DM Sans', sans-serif", fontSize: 12, fontWeight: 500,
+                        opacity: disabled ? 0.5 : 1, transition: "all 0.2s",
+                        ...style
+                    }}
+                >
+                    {children}
+                </button>
+            );
+        }
+
+        function Input({ value, onChange, placeholder, type = "text", style }) {
+            return (
+                <input
+                    type={type}
+                    value={value}
+                    onChange={e => onChange(e.target.value)}
+                    placeholder={placeholder}
+                    style={{
+                        width: "100%", padding: "8px 12px", borderRadius: 6,
+                        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                        color: "#fff", fontSize: 12, outline: "none",
+                        ...style
+                    }}
+                />
+            );
+        }
+
+        function MetricCard({ label, value, color, unit = "" }) {
             return (
                 <div style={{
                     padding: "12px 14px",
                     background: "rgba(255,255,255,0.03)",
                     borderRadius: 8,
-                    border: `1px solid rgba(255,255,255,0.08)`,
+                    border: `1px solid ${color}33`
                 }}>
-                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", fontFamily: "monospace", marginBottom: 4 }}>
+                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", fontFamily: "monospace", marginBottom: 4 }}>
                         {label}
                     </div>
-                    <div style={{ fontSize: 22, fontWeight: 600, color, fontFamily: "monospace" }}>
-                        {typeof value === 'number' ? value.toFixed(3) : value}{suffix}
+                    <div style={{ fontSize: 20, fontWeight: 600, color, fontFamily: "monospace" }}>
+                        {typeof value === "number" ? value.toFixed(3) : value}{unit}
                     </div>
                 </div>
             );
         }
 
-        function NeuroGauge({ label, value, color }) {
+        function Gauge({ label, value, color }) {
             return (
-                <div style={{
-                    padding: "8px 10px",
-                    background: "rgba(255,255,255,0.03)",
-                    borderRadius: 8,
-                    border: `1px solid rgba(255,255,255,0.08)`,
-                }}>
+                <div style={{ marginBottom: 8 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "monospace" }}>{label}</span>
-                        <span style={{ fontSize: 11, color, fontFamily: "monospace", fontWeight: 600 }}>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{label}</span>
+                        <span style={{ fontSize: 11, color, fontFamily: "monospace" }}>
                             {(value * 100).toFixed(0)}%
                         </span>
                     </div>
-                    <div style={{ height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2 }}>
                         <div style={{
                             height: "100%", width: `${value * 100}%",
-                            background: `linear-gradient(90deg, ${color}88, ${color})`,
-                            borderRadius: 2, transition: "width 0.3s ease",
-                            boxShadow: `0 0 6px ${color}`,
+                            background: color, borderRadius: 2,
+                            transition: "width 0.3s"
                         }} />
                     </div>
                 </div>
             );
         }
 
-        function PopBar({ pop, value, isWinner }) {
-            return (
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
-                    <div style={{
-                        width: 3, height: 16, borderRadius: 2,
-                        background: isWinner ? pop.color : "rgba(255,255,255,0.15)",
-                        boxShadow: isWinner ? `0 0 8px ${pop.color}` : "none",
-                        transition: "all 0.3s",
-                    }} />
-                    <span style={{
-                        fontSize: 9, width: 60,
-                        color: isWinner ? pop.color : "rgba(255,255,255,0.45)",
-                        fontFamily: "monospace", transition: "color 0.3s",
-                    }}>
-                        {pop.short}
-                    </span>
-                    <div style={{ flex: 1, height: 3, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
-                        <div style={{
-                            height: "100%", width: `${(value || 0) * 100}%`,
-                            background: isWinner ? pop.color : `${pop.color}55`,
-                            borderRadius: 2, transition: "width 0.3s ease",
-                        }} />
-                    </div>
-                </div>
-            );
-        }
-
-        function ChatMessage({ msg }) {
-            const isUser = msg.from === "user";
-            const time = new Date(msg.timestamp).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+        function Section({ title, children, defaultOpen = true }) {
+            const [open, setOpen] = useState(defaultOpen);
 
             return (
                 <div style={{
-                    display: "flex", flexDirection: "column",
-                    alignItems: isUser ? "flex-end" : "flex-start",
-                    marginBottom: 10, animation: "fadeIn 0.3s ease",
+                    background: "rgba(255,255,255,0.02)",
+                    borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)",
+                    marginBottom: 8, overflow: "hidden"
                 }}>
-                    <div style={{
-                        maxWidth: "85%", padding: "10px 14px",
-                        borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                        background: isUser ? "linear-gradient(135deg, #1565C0, #0D47A1)" : "rgba(255,255,255,0.06)",
-                        border: isUser ? "none" : "1px solid rgba(255,255,255,0.08)",
-                        color: "rgba(255,255,255,0.88)", fontSize: 13, lineHeight: 1.5,
-                    }}>
-                        {msg.text}
+                    <div
+                        onClick={() => setOpen(!open)}
+                        style={{
+                            padding: "10px 14px", cursor: "pointer",
+                            display: "flex", justifyContent: "space-between", alignItems: "center",
+                            borderBottom: open ? "1px solid rgba(255,255,255,0.04)" : "none"
+                        }}
+                    >
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontFamily: "monospace" }}>
+                            {title}
+                        </span>
+                        <span style={{ color: "rgba(255,255,255,0.3)" }}>{open ? "▼" : "▶"}</span>
                     </div>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginTop: 3, fontFamily: "monospace" }}>
-                        {time}
-                    </span>
-                </div>
-            );
-        }
-
-        function CheckpointList({ checkpoints, onLoad }) {
-            return (
-                <div style={{ maxHeight: 200, overflowY: "auto" }}>
-                    {checkpoints.length === 0 ? (
-                        <div style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.3)", fontSize: 12 }}>
-                            Нет сохранённых чекпоинтов
-                        </div>
-                    ) : (
-                        checkpoints.map((ckpt, i) => (
-                            <div key={i} style={{
-                                display: "flex", justifyContent: "space-between", alignItems: "center",
-                                padding: "8px 10px", marginBottom: 4,
-                                background: "rgba(255,255,255,0.03)",
-                                borderRadius: 6, border: "1px solid rgba(255,255,255,0.06)",
-                            }}>
-                                <div>
-                                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontFamily: "monospace" }}>
-                                        Epoch {ckpt.epoch}
-                                    </div>
-                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)" }}>
-                                        {new Date(ckpt.timestamp).toLocaleString("ru-RU")}
-                                    </div>
-                                </div>
-                                <button onClick={() => onLoad(ckpt.path)} style={{
-                                    padding: "4px 10px", borderRadius: 6,
-                                    background: "rgba(78,205,196,0.15)", border: "1px solid rgba(78,205,196,0.3)",
-                                    color: "#4ECDC4", fontSize: 10, cursor: "pointer",
-                                }}>
-                                    Load
-                                </button>
-                            </div>
-                        ))
-                    )}
+                    {open && <div style={{ padding: 12 }}>{children}</div>}
                 </div>
             );
         }
@@ -220,80 +186,77 @@
         // ── Main Dashboard ───────────────────────────────────────────────────
 
         function SynapseDashboard() {
+            // State
             const [connected, setConnected] = useState(false);
-            const [metrics, setMetrics] = useState({
-                phi: 0.4, mean_agency: 0, integration_score: 0,
-                meta_confidence: 0, meta_uncertainty: 0, self_confidence: 0,
+            const [status, setStatus] = useState({ state: "idle", step: 0, elapsed_human: "0s" });
+            const [metrics, setMetrics] = useState({});
+            const [neurochemistry, setNeurochemistry] = useState({
+                dopamine: 0.5, serotonin: 0.5, oxytocin: 0.5, cortisol: 0.3, norepinephrine: 0.4
             });
-            const [neurochemistry, setNeurochemistry] = useState(
-                Object.fromEntries(NEURO.map(n => [n.id, n.base]))
-            );
-            const [populations, setPopulations] = useState(
-                Object.fromEntries(POPULATIONS.map(p => [p.id, 0.5]))
-            );
-            const [neuroHistory, setNeuroHistory] = useState([]);
+            const [metricsHistory, setMetricsHistory] = useState([]);
+            const [checkpoints, setCheckpoints] = useState([]);
             const [messages, setMessages] = useState([]);
             const [input, setInput] = useState("");
-            const [stepCount, setStepCount] = useState(0);
-            const [checkpoints, setCheckpoints] = useState([]);
+            const [loading, setLoading] = useState({});
+
+            // Config states
+            const [stopConditions, setStopConditions] = useState({
+                max_steps: "", max_hours: "", max_samples: "", target_phi: "", target_agency: ""
+            });
+            const [neurogenesisConfig, setNeurogenesisConfig] = useState({
+                enabled: true, max_neurons: 100000, threshold: 0.85, rate: 0.1
+            });
+            const [trainingConfig, setTrainingConfig] = useState({
+                learning_rate: 0.0001, batch_size: 16, save_interval: 300
+            });
 
             const chatRef = useRef();
             const wsRef = useRef();
 
-            // WebSocket connection
+            // WebSocket
             useEffect(() => {
                 const connect = () => {
                     wsRef.current = new WebSocket(WS_URL);
-
-                    wsRef.current.onopen = () => {
-                        setConnected(true);
-                        console.log("WebSocket connected");
-                    };
-
-                    wsRef.current.onmessage = (event) => {
-                        const data = JSON.parse(event.data);
-                        if (data.type === "step") {
-                            setMetrics(prev => ({ ...prev, ...data.data.metrics }));
-                            setNeurochemistry(data.data.neurochemistry || {});
-                            setPopulations(data.data.populations || {});
-                            setStepCount(data.data.step);
-
-                            // Update history
-                            setNeuroHistory(prev => {
-                                const newEntry = { t: prev.length, ...data.data.neurochemistry };
-                                return [...prev.slice(-100), newEntry];
-                            });
+                    wsRef.current.onopen = () => setConnected(true);
+                    wsRef.current.onmessage = (e) => {
+                        const data = JSON.parse(e.data);
+                        if (data.type === "status" || data.type === "metrics") {
+                            setStatus(prev => ({ ...prev, ...data }));
+                            if (data.metrics) {
+                                setMetrics(data.metrics);
+                                setMetricsHistory(prev => [...prev.slice(-100), {
+                                    ...data.metrics, time: data.elapsed_seconds || 0
+                                }]);
+                            }
                         }
                     };
-
                     wsRef.current.onclose = () => {
                         setConnected(false);
-                        console.log("WebSocket disconnected, reconnecting...");
                         setTimeout(connect, 2000);
                     };
-
-                    wsRef.current.onerror = (error) => {
-                        console.error("WebSocket error:", error);
-                    };
                 };
-
                 connect();
                 return () => wsRef.current?.close();
             }, []);
 
-            // Load initial data
+            // Load data
             useEffect(() => {
-                const loadData = async () => {
-                    const status = await fetchAPI("/api/status");
-                    if (status) setStepCount(status.step_count);
+                const load = async () => {
+                    const s = await api("/api/status");
+                    if (s) setStatus(prev => ({ ...prev, ...s }));
 
-                    const ckpts = await fetchAPI("/api/checkpoints");
-                    if (ckpts) setCheckpoints(ckpts);
+                    const c = await api("/api/checkpoints");
+                    if (c) setCheckpoints(c);
 
-                    const chatHistory = await fetchAPI("/api/chat/history");
-                    if (chatHistory) setMessages(chatHistory);
+                    const n = await api("/api/neurogenesis");
+                    if (n) setNeurogenesisConfig(prev => ({ ...prev, ...n }));
+
+                    const h = await api("/api/chat/history");
+                    if (h) setMessages(h);
                 };
-                loadData();
+                load();
+                const interval = setInterval(load, 5000);
+                return () => clearInterval(interval);
             }, []);
 
             // Scroll chat
@@ -301,300 +264,399 @@
                 if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
             }, [messages]);
 
+            // API calls with loading state
+            const call = async (endpoint, method, body, key) => {
+                setLoading(prev => ({ ...prev, [key]: true }));
+                const res = await api(endpoint, method, body);
+                setLoading(prev => ({ ...prev, [key]: false }));
+
+                // Refresh status
+                const s = await api("/api/status");
+                if (s) setStatus(prev => ({ ...prev, ...s }));
+
+                return res;
+            };
+
+            // Training controls
+            const startTraining = () => call("/api/training/start", "POST", null, "start");
+            const pauseTraining = () => call("/api/training/pause", "POST", null, "pause");
+            const resumeTraining = () => call("/api/training/resume", "POST", null, "resume");
+            const stopTraining = () => {
+                if (confirm("Stop training? Progress will be saved.")) {
+                    call("/api/training/stop", "POST", null, "stop");
+                }
+            };
+
+            // Config updates
+            const updateStopConditions = async () => {
+                const body = {};
+                if (stopConditions.max_steps) body.max_steps = parseInt(stopConditions.max_steps);
+                if (stopConditions.max_hours) body.max_hours = parseFloat(stopConditions.max_hours);
+                if (stopConditions.max_samples) body.max_samples = parseInt(stopConditions.max_samples);
+                if (stopConditions.target_phi) body.target_phi = parseFloat(stopConditions.target_phi);
+                if (stopConditions.target_agency) body.target_agency = parseFloat(stopConditions.target_agency);
+                await call("/api/training/stop-conditions", "POST", body, "stopCond");
+            };
+
+            const updateNeurogenesis = async () => {
+                await call("/api/neurogenesis/config", "POST", neurogenesisConfig, "neuro");
+            };
+
+            const toggleNeurogenesis = async () => {
+                const newConfig = { ...neurogenesisConfig, enabled: !neurogenesisConfig.enabled };
+                setNeurogenesisConfig(newConfig);
+                await call("/api/neurogenesis/config", "POST", { enabled: newConfig.enabled }, "neuro");
+            };
+
+            // Checkpoints
+            const saveCheckpoint = () => call("/api/checkpoint/save", "POST", null, "save");
+            const loadCheckpoint = (path) => {
+                if (confirm("Load checkpoint? Current progress will be lost.")) {
+                    call(`/api/checkpoint/load?path=${encodeURIComponent(path)}`, "POST", null, "load");
+                }
+            };
+            const resetModel = () => {
+                if (confirm("Reset model? All progress will be lost!")) {
+                    call("/api/reset", "POST", null, "reset");
+                }
+            };
+
+            // Chat
             const sendMessage = async () => {
                 if (!input.trim()) return;
-                const userMsg = { from: "user", text: input, timestamp: new Date().toISOString() };
-                setMessages(prev => [...prev, userMsg]);
+                const res = await api("/api/chat", "POST", { text: input });
                 setInput("");
-
-                const response = await fetchAPI("/api/chat", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ text: input }),
-                });
-
-                if (response) {
-                    setMessages(prev => [...prev, {
-                        from: "brain",
-                        text: response.response,
-                        timestamp: new Date().toISOString(),
-                    }]);
-                    if (response.metrics) setMetrics(prev => ({ ...prev, ...response.metrics }));
+                if (res) {
+                    setMessages(prev => [...prev,
+                        { from: "user", text: input, timestamp: new Date().toISOString() },
+                        { from: "brain", text: res.response, timestamp: new Date().toISOString() }
+                    ]);
                 }
             };
 
-            const saveCheckpoint = async () => {
-                const result = await fetchAPI("/api/checkpoint/save", { method: "POST" });
-                if (result) {
-                    const ckpts = await fetchAPI("/api/checkpoints");
-                    if (ckpts) setCheckpoints(ckpts);
-                    alert("Прогресс сохранён!");
-                }
-            };
-
-            const loadCheckpoint = async (path) => {
-                const result = await fetchAPI(`/api/checkpoint/load?path=${encodeURIComponent(path)}`, { method: "POST" });
-                if (result) {
-                    alert("Чекпоинт загружен!");
-                }
-            };
-
-            const resetModel = async () => {
-                if (confirm("Сбросить модель? История будет потеряна!")) {
-                    await fetchAPI("/api/reset", { method: "POST" });
-                    setMessages([]);
-                    setStepCount(0);
-                }
-            };
+            // Render
+            const isRunning = status.state === "running";
+            const isPaused = status.state === "paused";
+            const isIdle = status.state === "idle";
 
             return (
                 <div style={{ minHeight: "100vh", background: "#060A12" }}>
                     {/* Header */}
                     <div style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
-                        padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        background: "rgba(6,10,18,0.9)", backdropFilter: "blur(10px)",
-                        position: "sticky", top: 0, zIndex: 100,
+                        padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        background: "rgba(6,10,18,0.95)", position: "sticky", top: 0, zIndex: 100
                     }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                                 <div style={{
                                     width: 8, height: 8, borderRadius: "50%",
-                                    background: "#4ECDC4", boxShadow: "0 0 10px #4ECDC4",
-                                    animation: "pulse 1.5s infinite",
+                                    background: connected ? "#4ECDC4" : "#FF6B9D",
+                                    boxShadow: `0 0 10px ${connected ? "#4ECDC4" : "#FF6B9D"}`
                                 }} />
-                                <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.08em" }}>SYNAPSE</span>
+                                <span style={{ fontSize: 14, fontWeight: 600 }}>SYNAPSE</span>
                             </div>
-                            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
-                            <span style={{ fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.3)" }}>
-                                Step: {stepCount}
-                            </span>
+                            <StatusBadge state={status.state} />
                         </div>
-                        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                            <ConnectionStatus connected={connected} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, fontSize: 11, fontFamily: "monospace", color: "rgba(255,255,255,0.5)" }}>
+                            <span>Step: {status.step?.toLocaleString()}</span>
+                            <span>Time: {status.elapsed_human}</span>
+                            <span>Neurons: {status.total_neurons?.toLocaleString()}</span>
                         </div>
                     </div>
 
-                    {/* Main Grid */}
-                    <div style={{
-                        display: "grid",
-                        gridTemplateColumns: "260px 1fr 280px",
-                        gap: 1,
-                        height: "calc(100vh - 49px)",
-                    }}>
-                        {/* Left Panel: Populations & Metrics */}
+                    {/* Main Layout */}
+                    <div style={{ display: "grid", gridTemplateColumns: "280px 1fr 300px", height: "calc(100vh - 45px)" }}>
+
+                        {/* Left: Controls */}
                         <div style={{
                             borderRight: "1px solid rgba(255,255,255,0.05)",
-                            overflowY: "auto", padding: "14px 12px",
-                            display: "flex", flexDirection: "column", gap: 12,
+                            overflowY: "auto", padding: 10
                         }}>
-                            <div>
-                                <div style={{
-                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
-                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 8,
-                                }}>
-                                    ПОПУЛЯЦИИ
+                            {/* Training Controls */}
+                            <Section title="▶ TRAINING CONTROL">
+                                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                                    {isIdle || isPaused ? (
+                                        <Button
+                                            variant="success"
+                                            onClick={isPaused ? resumeTraining : startTraining}
+                                            disabled={loading.start}
+                                            style={{ flex: 1 }}
+                                        >
+                                            {isPaused ? "▶ RESUME" : "▶ START"}
+                                        </Button>
+                                    ) : null}
+
+                                    {isRunning && (
+                                        <Button variant="warning" onClick={pauseTraining} style={{ flex: 1 }}>
+                                            ⏸ PAUSE
+                                        </Button>
+                                    )}
+
+                                    {!isIdle && (
+                                        <Button variant="danger" onClick={stopTraining} style={{ flex: 1 }}>
+                                            ⏹ STOP
+                                        </Button>
+                                    )}
                                 </div>
-                                {POPULATIONS.map(pop => (
-                                    <PopBar
-                                        key={pop.id}
-                                        pop={pop}
-                                        value={populations[pop.id]}
-                                        isWinner={populations[pop.id] === Math.max(...Object.values(populations))}
-                                    />
-                                ))}
-                            </div>
+                            </Section>
 
-                            <div style={{
-                                display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
-                            }}>
-                                <MetricCard label="IIT Φ" value={metrics.phi} color="#FFD93D" />
-                                <MetricCard label="AGENCY" value={metrics.mean_agency} color="#A8E6CF" />
-                            </div>
+                            {/* Stop Conditions */}
+                            <Section title="⏱ STOP CONDITIONS">
+                                <div style={{ display: "grid", gap: 8 }}>
+                                    <div>
+                                        <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Max Steps</label>
+                                        <Input
+                                            type="number"
+                                            value={stopConditions.max_steps}
+                                            onChange={v => setStopConditions(prev => ({ ...prev, max_steps: v }))}
+                                            placeholder="e.g. 100000"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Max Hours</label>
+                                        <Input
+                                            type="number"
+                                            value={stopConditions.max_hours}
+                                            onChange={v => setStopConditions(prev => ({ ...prev, max_hours: v }))}
+                                            placeholder="e.g. 8"
+                                        />
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                        <div>
+                                            <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Target Φ</label>
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={stopConditions.target_phi}
+                                                onChange={v => setStopConditions(prev => ({ ...prev, target_phi: v }))}
+                                                placeholder="0.7"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Target Agency</label>
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={stopConditions.target_agency}
+                                                onChange={v => setStopConditions(prev => ({ ...prev, target_agency: v }))}
+                                                placeholder="0.7"
+                                            />
+                                        </div>
+                                    </div>
+                                    <Button onClick={updateStopConditions} variant="primary" style={{ width: "100%" }}>
+                                        Apply Stop Conditions
+                                    </Button>
+                                </div>
+                            </Section>
 
-                            <MetricCard
-                                label="INTEGRATION SCORE"
-                                value={metrics.integration_score}
-                                color="#4ECDC4"
-                            />
+                            {/* Neurogenesis */}
+                            <Section title="🧬 NEUROGENESIS">
+                                <div style={{ marginBottom: 10 }}>
+                                    <label style={{
+                                        display: "flex", alignItems: "center", gap: 8,
+                                        cursor: "pointer", fontSize: 11
+                                    }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={neurogenesisConfig.enabled}
+                                            onChange={toggleNeurogenesis}
+                                            style={{ width: 16, height: 16 }}
+                                        />
+                                        Enable Neurogenesis
+                                    </label>
+                                </div>
 
-                            <div style={{
-                                display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
-                            }}>
-                                <MetricCard label="CONFIDENCE" value={metrics.meta_confidence} color="#96CEB4" />
-                                <MetricCard label="UNCERTAINTY" value={metrics.meta_uncertainty} color="#FF8C42" />
-                            </div>
+                                <div style={{ display: "grid", gap: 8 }}>
+                                    <div>
+                                        <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Max Neurons</label>
+                                        <Input
+                                            type="number"
+                                            value={neurogenesisConfig.max_neurons}
+                                            onChange={v => setNeurogenesisConfig(prev => ({ ...prev, max_neurons: parseInt(v) || 0 }))}
+                                        />
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                        <div>
+                                            <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Threshold</label>
+                                            <Input
+                                                type="number"
+                                                step="0.05"
+                                                value={neurogenesisConfig.threshold}
+                                                onChange={v => setNeurogenesisConfig(prev => ({ ...prev, threshold: parseFloat(v) || 0 }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: 9, color: "rgba(255,255,255,0.4)" }}>Growth Rate</label>
+                                            <Input
+                                                type="number"
+                                                step="0.05"
+                                                value={neurogenesisConfig.rate}
+                                                onChange={v => setNeurogenesisConfig(prev => ({ ...prev, rate: parseFloat(v) || 0 }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <Button onClick={updateNeurogenesis} style={{ width: "100%" }}>
+                                        Update Config
+                                    </Button>
+                                </div>
+
+                                <div style={{ marginTop: 8, fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
+                                    Growth events: {status.growth_events || 0}
+                                </div>
+                            </Section>
+
+                            {/* Checkpoints */}
+                            <Section title="💾 CHECKPOINTS">
+                                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                                    <Button onClick={saveCheckpoint} variant="primary" style={{ flex: 1 }}>
+                                        💾 Save
+                                    </Button>
+                                    <Button onClick={resetModel} variant="danger" style={{ flex: 1 }}>
+                                        🔄 Reset
+                                    </Button>
+                                </div>
+
+                                <div style={{ maxHeight: 150, overflowY: "auto" }}>
+                                    {checkpoints.length === 0 ? (
+                                        <div style={{ textAlign: "center", padding: 10, color: "rgba(255,255,255,0.3)", fontSize: 11 }}>
+                                            No checkpoints yet
+                                        </div>
+                                    ) : (
+                                        checkpoints.map((ckpt, i) => (
+                                            <div key={i} style={{
+                                                display: "flex", justifyContent: "space-between", alignItems: "center",
+                                                padding: "6px 8px", marginBottom: 4,
+                                                background: "rgba(255,255,255,0.02)",
+                                                borderRadius: 6, fontSize: 10
+                                            }}>
+                                                <div>
+                                                    <div style={{ color: "rgba(255,255,255,0.7)" }}>{ckpt.name}</div>
+                                                    <div style={{ color: "rgba(255,255,255,0.3)" }}>
+                                                        {ckpt.size_mb?.toFixed(1)} MB
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    onClick={() => loadCheckpoint(ckpt.path)}
+                                                    style={{ padding: "4px 8px", fontSize: 9 }}
+                                                >
+                                                    Load
+                                                </Button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </Section>
                         </div>
 
                         {/* Center: Charts */}
                         <div style={{
                             display: "flex", flexDirection: "column",
-                            borderRight: "1px solid rgba(255,255,255,0.05)",
-                            overflow: "hidden",
+                            borderRight: "1px solid rgba(255,255,255,0.05)", overflow: "hidden"
                         }}>
-                            {/* Neuro History Chart */}
-                            <div style={{ flex: 1, padding: "14px" }}>
+                            {/* Metrics */}
+                            <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                                 <div style={{
-                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
-                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 8,
+                                    display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8
                                 }}>
-                                    НЕЙРОХИМИЯ · ИСТОРИЯ
+                                    <MetricCard label="IIT Φ" value={metrics.phi || 0} color="#FFD93D" />
+                                    <MetricCard label="AGENCY" value={metrics.mean_agency || 0} color="#A8E6CF" />
+                                    <MetricCard label="INTEGRATION" value={metrics.integration_score || 0} color="#4ECDC4" />
+                                    <MetricCard label="CONFIDENCE" value={metrics.meta_confidence || 0} color="#96CEB4" />
                                 </div>
-                                <div style={{ height: "calc(100% - 28px)" }}>
+                            </div>
+
+                            {/* Charts */}
+                            <div style={{ flex: 1, padding: 10, minHeight: 0 }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", marginBottom: 6 }}>
+                                    METRICS HISTORY
+                                </div>
+                                <div style={{ height: "calc(100% - 20px)" }}>
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={neuroHistory} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                                            <Tooltip
-                                                contentStyle={{
-                                                    background: "rgba(6,10,18,0.95)",
-                                                    border: "1px solid rgba(255,255,255,0.1)",
-                                                    borderRadius: 8, fontSize: 10, fontFamily: "monospace",
-                                                }}
-                                                formatter={(v) => `${(v * 100).toFixed(0)}%`}
-                                            />
-                                            {NEURO.map(n => (
-                                                <Area
-                                                    key={n.id}
-                                                    type="monotone"
-                                                    dataKey={n.id}
-                                                    stroke={n.color}
-                                                    fill={`${n.color}11`}
-                                                    strokeWidth={1.5}
-                                                    dot={false}
-                                                />
-                                            ))}
+                                        <AreaChart data={metricsHistory}>
+                                            <Tooltip contentStyle={{
+                                                background: "rgba(6,10,18,0.95)",
+                                                border: "1px solid rgba(255,255,255,0.1)",
+                                                borderRadius: 8, fontSize: 10
+                                            }} />
+                                            <Area type="monotone" dataKey="phi" stroke="#FFD93D" fill="#FFD93D11" strokeWidth={1.5} />
+                                            <Area type="monotone" dataKey="mean_agency" stroke="#A8E6CF" fill="#A8E6CF11" strokeWidth={1.5} />
+                                            <Area type="monotone" dataKey="integration_score" stroke="#4ECDC4" fill="#4ECDC411" strokeWidth={1.5} />
                                         </AreaChart>
                                     </ResponsiveContainer>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Right: Neuro Gauges + Chat + Controls */}
+                        {/* Right: Neurochemistry + Chat */}
                         <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
-                            {/* Neuro Gauges */}
-                            <div style={{
-                                padding: "12px", borderBottom: "1px solid rgba(255,255,255,0.05)",
-                                flex: "0 0 auto",
-                            }}>
-                                <div style={{
-                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
-                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 8,
-                                }}>
-                                    НЕЙРОМЕДИАТОРЫ
+                            {/* Neurochemistry */}
+                            <div style={{ padding: 10, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "monospace", marginBottom: 8 }}>
+                                    NEUROCHEMISTRY
                                 </div>
-                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                    {NEURO.map(n => (
-                                        <NeuroGauge
-                                            key={n.id}
-                                            label={n.label}
-                                            value={neurochemistry[n.id] || n.base}
-                                            color={n.color}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Controls */}
-                            <div style={{
-                                padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)",
-                                flex: "0 0 auto",
-                            }}>
-                                <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-                                    <button
-                                        onClick={saveCheckpoint}
-                                        style={{
-                                            flex: 1, padding: "8px 12px", borderRadius: 6,
-                                            background: "rgba(255,217,61,0.15)",
-                                            border: "1px solid rgba(255,217,61,0.3)",
-                                            color: "#FFD93D", fontSize: 10, cursor: "pointer",
-                                            fontFamily: "monospace",
-                                        }}
-                                    >
-                                        💾 SAVE
-                                    </button>
-                                    <button
-                                        onClick={resetModel}
-                                        style={{
-                                            flex: 1, padding: "8px 12px", borderRadius: 6,
-                                            background: "rgba(255,107,157,0.15)",
-                                            border: "1px solid rgba(255,107,157,0.3)",
-                                            color: "#FF6B9D", fontSize: 10, cursor: "pointer",
-                                            fontFamily: "monospace",
-                                        }}
-                                    >
-                                        🔄 RESET
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Checkpoints */}
-                            <div style={{
-                                padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,0.05)",
-                                flex: "0 0 auto", maxHeight: 150, overflowY: "auto",
-                            }}>
-                                <div style={{
-                                    fontSize: 9, color: "rgba(255,255,255,0.3)",
-                                    fontFamily: "monospace", letterSpacing: "0.1em", marginBottom: 6,
-                                }}>
-                                    ЧЕКПОИНТЫ ({checkpoints.length})
-                                </div>
-                                <CheckpointList checkpoints={checkpoints} onLoad={loadCheckpoint} />
+                                <Gauge label="Dopamine" value={neurochemistry.dopamine} color="#FFD93D" />
+                                <Gauge label="Serotonin" value={neurochemistry.serotonin} color="#4ECDC4" />
+                                <Gauge label="Oxytocin" value={neurochemistry.oxytocin} color="#A8E6CF" />
+                                <Gauge label="Cortisol" value={neurochemistry.cortisol} color="#FF8C42" />
+                                <Gauge label="Norepinephrine" value={neurochemistry.norepinephrine} color="#FF6B9D" />
                             </div>
 
                             {/* Chat */}
                             <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
-                                <div style={{ padding: "8px 12px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                                    <span style={{
-                                        fontSize: 9, color: "rgba(255,255,255,0.3)",
-                                        fontFamily: "monospace", letterSpacing: "0.1em",
-                                    }}>
-                                        ЧАТ
+                                <div style={{ padding: "8px 10px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "monospace" }}>
+                                        CHAT
                                     </span>
                                 </div>
 
-                                <div
-                                    ref={chatRef}
-                                    style={{
-                                        flex: 1, overflowY: "auto", padding: "10px 12px",
-                                        display: "flex", flexDirection: "column", gap: 2,
-                                    }}
-                                >
+                                <div ref={chatRef} style={{
+                                    flex: 1, overflowY: "auto", padding: 10,
+                                    display: "flex", flexDirection: "column", gap: 6
+                                }}>
                                     {messages.length === 0 ? (
                                         <div style={{
                                             textAlign: "center", padding: 20,
-                                            color: "rgba(255,255,255,0.3)", fontSize: 12,
+                                            color: "rgba(255,255,255,0.3)", fontSize: 11
                                         }}>
-                                            Начните диалог...
+                                            Start conversation...
                                         </div>
                                     ) : (
-                                        messages.map((msg, i) => <ChatMessage key={i} msg={msg} />)
+                                        messages.map((msg, i) => (
+                                            <div key={i} style={{
+                                                display: "flex", flexDirection: "column",
+                                                alignItems: msg.from === "user" ? "flex-end" : "flex-start"
+                                            }}>
+                                                <div style={{
+                                                    maxWidth: "85%", padding: "8px 12px",
+                                                    borderRadius: msg.from === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px",
+                                                    background: msg.from === "user"
+                                                        ? "linear-gradient(135deg, #1565C0, #0D47A1)"
+                                                        : "rgba(255,255,255,0.06)",
+                                                    fontSize: 12, lineHeight: 1.4
+                                                }}>
+                                                    {msg.text}
+                                                </div>
+                                            </div>
+                                        ))
                                     )}
                                 </div>
 
-                                <div style={{ padding: "10px 12px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                                    <div style={{ display: "flex", gap: 8 }}>
+                                <div style={{ padding: 10, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                                    <div style={{ display: "flex", gap: 6 }}>
                                         <input
                                             value={input}
                                             onChange={e => setInput(e.target.value)}
                                             onKeyDown={e => e.key === "Enter" && sendMessage()}
-                                            placeholder="Написать..."
+                                            placeholder="Message..."
                                             style={{
-                                                flex: 1,
+                                                flex: 1, padding: "8px 12px", borderRadius: 8,
                                                 background: "rgba(255,255,255,0.05)",
                                                 border: "1px solid rgba(255,255,255,0.1)",
-                                                borderRadius: 8, padding: "8px 12px",
-                                                color: "white", fontSize: 13, outline: "none",
+                                                color: "#fff", fontSize: 12, outline: "none"
                                             }}
                                         />
-                                        <button
-                                            onClick={sendMessage}
-                                            style={{
-                                                width: 36, height: 36, borderRadius: 8,
-                                                background: "linear-gradient(135deg, #1565C0, #0D47A1)",
-                                                border: "none", color: "white", cursor: "pointer",
-                                            }}
-                                        >
-                                            →
-                                        </button>
+                                        <Button onClick={sendMessage} variant="primary">→</Button>
                                     </div>
                                 </div>
                             </div>
@@ -604,7 +666,6 @@
             );
         }
 
-        // Render
         ReactDOM.createRoot(document.getElementById('root')).render(<SynapseDashboard />);
     </script>
 </body>
