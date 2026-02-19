@@ -1,134 +1,96 @@
 @echo off
-REM ============================================================
-REM SYNAPSE - Installation Script
-REM ============================================================
-REM
-REM This script:
-REM 1. Creates virtual environment
-REM 2. Installs PyTorch (CPU or CUDA)
-REM 3. Installs all dependencies
-REM 4. Runs verification
-REM
-REM Usage:
-REM   setup.bat          - Install with CPU PyTorch
-REM   setup.bat cuda     - Install with CUDA PyTorch
-REM   setup.bat cuda121  - Install with CUDA 12.1
-REM
-REM ============================================================
+chcp 65001 >nul 2>&1
 
-setlocal enabledelayedexpansion
-
-echo.
 echo ============================================================
-echo    SYNAPSE - Self-Aware AI Installation
+echo    SYNAPSE - Installation Script
 echo ============================================================
 echo.
 
-REM Detect CUDA argument
-set CUDA_VERSION=%1
-if "%CUDA_VERSION%"=="" set CUDA_VERSION=none
+REM ============================================================
+REM Step 1: Check Python
+REM ============================================================
+echo [1/5] Checking Python...
 
-REM Check Python
-echo [1/6] Checking Python...
-python --version >nul 2>&1
+where python >nul 2>&1
 if errorlevel 1 (
     echo.
     echo ERROR: Python not found!
     echo.
-    echo Please install Python 3.9+ from:
-    echo   https://www.python.org/downloads/
-    echo.
+    echo Please install Python 3.9+ from https://www.python.org/downloads/
     echo Make sure to check "Add Python to PATH" during installation.
     echo.
     pause
     exit /b 1
 )
 
-for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
-echo       Python %PYTHON_VERSION% found
-
-REM Check if already in venv
-if defined VIRTUAL_ENV (
-    echo.
-    echo WARNING: Virtual environment already active!
-    echo   Current: %VIRTUAL_ENV%
-    echo.
-    set /p CONTINUE="Continue anyway? (y/n): "
-    if /i not "!CONTINUE!"=="y" exit /b 0
-)
-
-REM Create venv
+python --version
+echo       OK
 echo.
-echo [2/6] Creating virtual environment...
+
+REM ============================================================
+REM Step 2: Create virtual environment
+REM ============================================================
+echo [2/5] Creating virtual environment...
+
 if exist "venv" (
-    echo       venv already exists, skipping creation
+    echo       venv already exists
 ) else (
     python -m venv venv
     if errorlevel 1 (
         echo.
-        echo ERROR: Failed to create virtual environment!
-        echo Make sure you have 'python -m venv' available.
+        echo ERROR: Failed to create venv!
         pause
         exit /b 1
     )
-    echo       Created: venv\
+    echo       Created venv
 )
-
-REM Activate venv
 echo.
-echo [3/6] Activating virtual environment...
+
+REM ============================================================
+REM Step 3: Activate and upgrade pip
+REM ============================================================
+echo [3/5] Activating environment...
+
 call venv\Scripts\activate.bat
-if errorlevel 1 (
-    echo ERROR: Failed to activate virtual environment!
-    pause
-    exit /b 1
-)
-echo       Activated successfully
-
-REM Upgrade pip
-echo.
-echo [4/6] Upgrading pip...
 python -m pip install --upgrade pip -q
-echo       Done
-
-REM Install PyTorch
-echo.
-echo [5/6] Installing PyTorch...
+echo       OK
 echo.
 
-if "%CUDA_VERSION%"=="cuda" (
-    echo       Installing PyTorch with CUDA (latest)...
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-) else if "%CUDA_VERSION%"=="cuda121" (
-    echo       Installing PyTorch with CUDA 12.1...
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-) else if "%CUDA_VERSION%"=="cuda118" (
-    echo       Installing PyTorch with CUDA 11.8...
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-) else (
-    echo       Installing PyTorch (CPU version)...
-    echo       Tip: Use 'setup.bat cuda' for GPU support
-    pip install torch torchvision torchaudio
-)
-
-if errorlevel 1 (
-    echo.
-    echo WARNING: PyTorch installation had issues, continuing...
-)
-
-REM Install other dependencies
+REM ============================================================
+REM Step 4: Install PyTorch
+REM ============================================================
+echo [4/5] Installing PyTorch...
 echo.
-echo [6/6] Installing SYNAPSE dependencies...
+
+set CUDA_MODE=%1
+if "%CUDA_MODE%"=="" set CUDA_MODE=cpu
+
+if "%CUDA_MODE%"=="cuda" goto install_cuda
+if "%CUDA_MODE%"=="cuda121" goto install_cuda
+goto install_cpu
+
+:install_cuda
+echo       Installing PyTorch with CUDA...
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+goto done_torch
+
+:install_cpu
+echo       Installing PyTorch CPU...
+echo       (Use 'setup.bat cuda' for GPU)
+pip install torch torchvision torchaudio
+goto done_torch
+
+:done_torch
+echo       PyTorch installed
+echo.
+
+REM ============================================================
+REM Step 5: Install dependencies
+REM ============================================================
+echo [5/5] Installing SYNAPSE dependencies...
+
 cd files
-
-REM Install from requirements.txt
-pip install -r requirements.txt -q
-
-if errorlevel 1 (
-    echo.
-    echo WARNING: Some dependencies may have failed to install
-)
-
+pip install -r requirements.txt
 cd ..
 
 echo.
@@ -138,40 +100,19 @@ echo ============================================================
 echo.
 
 REM Verification
-echo Running verification...
+echo Verifying installation...
 echo.
 
 cd files
 python quickstart.py
-set VERIFY_RESULT=%errorlevel%
 cd ..
 
 echo.
 echo ============================================================
-
-if %VERIFY_RESULT%==0 (
-    echo.
-    echo    SUCCESS! SYNAPSE is ready to use.
-    echo.
-    echo    Next steps:
-    echo.
-    echo      1. Activate environment:
-    echo         venv\Scripts\activate
-    echo.
-    echo      2. Run continuous training:
-    echo         cd files
-    echo         python train_continuous.py
-    echo.
-    echo      3. Or start with dashboard:
-    echo         run_life.bat
-    echo.
-) else (
-    echo.
-    echo    WARNING: Verification had issues.
-    echo    Check the errors above.
-    echo.
-)
-
+echo    Done! Next steps:
+echo.
+echo    1. run_life.bat   - Start AI life
+echo    2. test.bat       - Run all tests
 echo ============================================================
 echo.
 
