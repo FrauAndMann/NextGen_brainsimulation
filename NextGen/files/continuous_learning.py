@@ -385,10 +385,19 @@ class ContinuousTrainer:
 
     def load_checkpoint(self, path: str):
         """Load checkpoint and resume"""
-        checkpoint = torch.load(path, map_location=self.config.device)
+        checkpoint = torch.load(path, map_location=self.config.device, weights_only=False)
 
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model.internal_state = checkpoint['internal_state']
+
+        # Handle internal_state size mismatch (batch dimension can vary)
+        saved_state = checkpoint.get('internal_state')
+        if saved_state is not None:
+            # Take first sample if sizes don't match (will be expanded during training)
+            if saved_state.dim() == 2 and saved_state.shape[0] > 0:
+                self.model.internal_state = saved_state[:1]  # Keep only first sample
+            else:
+                self.model.internal_state = saved_state
+
         self.model.history_buffer = list(checkpoint.get('history_buffer', []))
 
         self.step_count = checkpoint.get('step_count', 0)
