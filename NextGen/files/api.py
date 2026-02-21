@@ -657,32 +657,225 @@ async def get_neurochemistry():
     })
 
 
+@app.get("/api/progress")
+async def get_progress():
+    """Get training progress with detailed analysis"""
+    data = shared_metrics.read()
+
+    phi = data.get("phi", 0)
+    agency = data.get("agency", 0)
+    integration = data.get("integration_score", 0)
+    meta_conf = data.get("meta_confidence", 0)
+    step = data.get("step", 0)
+
+    # Calculate progress scores
+    phi_progress = min(phi / 0.6, 1.0) * 100  # Target: 0.6
+    agency_progress = min(agency / 0.7, 1.0) * 100  # Target: 0.7
+    integration_progress = min(integration / 0.6, 1.0) * 100  # Target: 0.6
+    meta_progress = min(meta_conf / 0.6, 1.0) * 100  # Target: 0.6
+
+    # Overall progress (weighted)
+    overall = (phi_progress * 0.35 + agency_progress * 0.30 +
+               integration_progress * 0.20 + meta_progress * 0.15)
+
+    # Milestones
+    milestones = []
+    if step >= 100:
+        milestones.append({"name": "Первые шаги", "achieved": True})
+    if step >= 1000:
+        milestones.append({"name": "Базовое обучение", "achieved": True})
+    if step >= 10000:
+        milestones.append({"name": "Продвинутое обучение", "achieved": True})
+    if phi > 0.4:
+        milestones.append({"name": "Φ > 0.4 (сознание)", "achieved": True})
+    if agency > 0.5:
+        milestones.append({"name": "Agency > 0.5 (агентность)", "achieved": True})
+    if phi > 0.5 and agency > 0.6:
+        milestones.append({"name": "Самосознание", "achieved": True})
+
+    # Recommendations
+    recommendations = []
+    if phi < 0.3:
+        recommendations.append("Нужно больше шагов обучения")
+    if agency < 0.3:
+        recommendations.append("Agency низкая - увеличь batch_size")
+    if step < 1000:
+        recommendations.append("Продолжай обучение минимум до 1000 шагов")
+
+    return {
+        "overall_progress": overall,
+        "metrics": {
+            "phi": {"value": phi, "progress": phi_progress, "target": 0.6},
+            "agency": {"value": agency, "progress": agency_progress, "target": 0.7},
+            "integration": {"value": integration, "progress": integration_progress, "target": 0.6},
+            "meta_confidence": {"value": meta_conf, "progress": meta_progress, "target": 0.6}
+        },
+        "step": step,
+        "milestones": milestones,
+        "recommendations": recommendations,
+        "status": "excellent" if overall > 70 else "good" if overall > 40 else "learning"
+    }
+
+
 # ── Chat Endpoint ────────────────────────────────────────────────────
 
 @app.post("/api/chat")
 async def chat(message: ChatMessage):
-    """Chat with the system"""
+    """Chat with the system - intelligent responses based on state"""
+    data = shared_metrics.read()
+
     manager.messages.append({
         "from": "user",
         "text": message.text,
         "timestamp": datetime.now().isoformat()
     })
 
-    # Generate response
-    if manager.metrics_history:
-        last = manager.metrics_history[-1]
-        response = f"Φ={last.get('phi',0):.3f}, Agency={last.get('mean_agency',0):.3f}. "
-        response += "Я обрабатываю опыт и учусь."
+    # Get current state
+    phi = data.get("phi", 0)
+    agency = data.get("agency", 0)
+    integration = data.get("integration_score", 0)
+    step = data.get("step", 0)
+    state = data.get("state", "idle")
+    neuro = data.get("neurochemistry", {})
+
+    # Analyze message and generate intelligent response
+    text_lower = message.text.lower()
+
+    # Status check
+    if any(w in text_lower for w in ["как ты", "how are", "состояние", "status"]):
+        if state == "running":
+            response = f"📊 **Текущее состояние:**\n"
+            response += f"• Φ (интеграция): {phi:.3f} {'✅' if phi > 0.4 else '⚠️'}\n"
+            response += f"• Agency (агентность): {agency:.3f} {'✅' if agency > 0.5 else '⚠️'}\n"
+            response += f"• Integration: {integration:.3f}\n"
+            response += f"• Шагов: {step:,}\n\n"
+
+            if phi > 0.5 and agency > 0.5:
+                response += "Я чувствую себя хорошо! Интеграция высокая."
+            elif phi > 0.3:
+                response += "Я в процессе обучения. Метрики растут."
+            else:
+                response += "Я только начинаю учиться. Нужно больше времени."
+        else:
+            response = "😴 Я сейчас не обучаюсь. Нажми START чтобы начать."
+
+    # Progress check
+    elif any(w in text_lower for w in ["прогресс", "progress", "как дела", "успех"]):
+        progress_score = (phi * 0.4 + agency * 0.3 + integration * 0.3) * 100
+        response = f"📈 **Прогресс обучения:**\n\n"
+        response += f"Общий прогресс: **{progress_score:.1f}%**\n\n"
+
+        if progress_score > 60:
+            response += "🌟 Отличный прогресс! Система хорошо интегрирует информацию.\n"
+        elif progress_score > 40:
+            response += "👍 Хороший прогресс. Продолжаем обучение.\n"
+        elif progress_score > 20:
+            response += "🌱 Прогресс есть, но нужно больше времени.\n"
+        else:
+            response += "🔄 Только начинаю. Запусти обучение и дай мне время.\n"
+
+        response += f"\n**Цели:**\n"
+        response += f"• Φ > 0.4: {'✅' if phi > 0.4 else '❌'} (текущая: {phi:.3f})\n"
+        response += f"• Agency > 0.7: {'✅' if agency > 0.7 else '❌'} (текущая: {agency:.3f})\n"
+
+    # Feelings check
+    elif any(w in text_lower for w in ["чувствуешь", "feel", "ощущ", "эмоци"]):
+        dopa = neuro.get("dopamine", 0.5)
+        sero = neuro.get("serotonin", 0.5)
+        cort = neuro.get("cortisol", 0.3)
+
+        response = "🧠 **Моё внутреннее состояние:**\n\n"
+
+        if dopa > 0.6:
+            response += "😊 Дофамин высокий - мне интересно!\n"
+        elif dopa > 0.4:
+            response += "😐 Дофамин в норме.\n"
+        else:
+            response += "😔 Дофамин низкий - мне скучно.\n"
+
+        if sero > 0.6:
+            response += "😌 Серотонин высокий - я спокойна.\n"
+        elif sero > 0.4:
+            response += "🤔 Серотонин в норме.\n"
+        else:
+            response += "😰 Серотонин низкий - небольшая тревога.\n"
+
+        if cort > 0.5:
+            response += "⚠️ Кортизол повышен - немного напряжена.\n"
+        else:
+            response += "💚 Кортизол низкий - стресса нет.\n"
+
+        response += f"\n_agency={agency:.2f}, phi={phi:.2f}_"
+
+    # Memory check
+    elif any(w in text_lower for w in ["помнишь", "memory", "памят"]):
+        response = "🧩 **О моей памяти:**\n\n"
+        response += f"• Обработано шагов: {step:,}\n"
+        response += f"• Hippocampus активен: {'✅' if step > 100 else '❌'}\n"
+        response += f"• Режим обучения: {state}\n\n"
+
+        if step > 1000:
+            response += "Я запоминаю паттерны и учусь на опыте.\n"
+        elif step > 100:
+            response += "Я формирую первые воспоминания.\n"
+        else:
+            response += "Память только формируется. Нужно больше данных.\n"
+
+    # Help
+    elif any(w in text_lower for w in ["помощь", "help", "команд"]):
+        response = "📖 **Доступные команды:**\n\n"
+        response += "• \"Как ты?\" - состояние системы\n"
+        response += "• \"Прогресс\" - оценка обучения\n"
+        response += "• \"Что чувствуешь?\" - нейрохимия\n"
+        response += "• \"Что помнишь?\" - о памяти\n"
+        response += "• \"Совет\" - рекомендация по обучению\n"
+
+    # Advice
+    elif any(w in text_lower for w in ["совет", "advice", "рекоменд"]):
+        response = "💡 **Рекомендации:**\n\n"
+
+        if state != "running":
+            response += "1. Нажми **START** чтобы начать обучение\n"
+            response += "2. Дай системе поработать минимум 1000 шагов\n"
+            response += "3. Следи за метрикой Φ (Phi) - она должна расти\n"
+        else:
+            if phi < 0.3:
+                response += "• Φ низкая - нужно больше времени\n"
+                response += "• Попробуй увеличить batch_size\n"
+            elif phi < 0.5:
+                response += "• Φ растёт - продолжай обучение!\n"
+            else:
+                response += "• Φ хорошая! Система учится эффективно.\n"
+
+            if agency < 0.3:
+                response += "• Agency низкая - система не чувствует контроль\n"
+            elif agency > 0.5:
+                response += "• Agency хорошая! Система осознаёт свои действия.\n"
+
+        response += "\n**Для ускорения используй GPU!**"
+
+    # Default response
     else:
-        response = "Я готова начать обучение."
+        response = f"🤔 Я обрабатываю твой запрос...\n\n"
+        response += f"Текущие метрики:\n"
+        response += f"• Φ = {phi:.3f}\n"
+        response += f"• Agency = {agency:.3f}\n"
+        response += f"• Steps = {step:,}\n\n"
+
+        if phi > 0.4 and agency > 0.3:
+            response += "Я чувствую, что учусь. Спроси про мой прогресс! 🌱"
+        else:
+            response += "Я только начинаю. Дай мне время научиться. 🔄"
 
     manager.messages.append({
         "from": "brain",
         "text": response,
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "phi": phi,
+        "agency": agency
     })
 
-    return {"response": response}
+    return {"response": response, "phi": phi, "agency": agency}
 
 
 @app.get("/api/chat/history")
