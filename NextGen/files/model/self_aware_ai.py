@@ -264,13 +264,13 @@ class SelfAwareAI(nn.Module):
         # METRICS
         # ========================================
         metrics = {
-            'world_prediction_error': float(world_prediction_error),
-            'mean_agency': float(agency_signal.mean()) if isinstance(agency_signal, torch.Tensor) else float(agency_signal),
-            'integration_score': float(integration_score.mean()),
-            'phi': float(phi.mean()),
-            'meta_confidence': float(meta_output['confidence'].mean()),
-            'meta_uncertainty': float(meta_output['epistemic_uncertainty'].mean()),
-            'self_confidence': float(self_confidence.mean())
+            'world_prediction_error': float(world_prediction_error) if not isinstance(world_prediction_error, torch.Tensor) else float(world_prediction_error.detach()),
+            'mean_agency': float(agency_signal.mean().detach()) if isinstance(agency_signal, torch.Tensor) else float(agency_signal),
+            'integration_score': float(integration_score.mean().detach()),
+            'phi': float(phi.mean().detach()),
+            'meta_confidence': float(meta_output['confidence'].mean().detach()),
+            'meta_uncertainty': float(meta_output['epistemic_uncertainty'].mean().detach()),
+            'self_confidence': float(self_confidence.mean().detach())
         }
 
         return action, conscious_content_dict, metrics
@@ -299,9 +299,9 @@ class SelfAwareAI(nn.Module):
             conscious_content['self_state']
         )
 
-        integration = float(conscious_content['integration_score'].mean())
-        agency = float(conscious_content['agency_signal'].mean())
-        phi = float(conscious_content['phi'].mean())
+        integration = float(conscious_content['integration_score'].mean().detach())
+        agency = float(conscious_content['agency_signal'].mean().detach())
+        phi = float(conscious_content['phi'].mean().detach())
 
         # Construct full report
         report = {

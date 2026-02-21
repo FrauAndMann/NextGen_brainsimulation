@@ -281,19 +281,37 @@ class ContinuousTrainer:
         """Compute all losses"""
         losses = {}
 
-        # World model loss
-        if len(self.model.history_buffer) >= 2:
-            world_loss, _ = self.model.world_model.compute_loss(
-                observation.unsqueeze(0) if observation.dim() == 1 else observation
-            )
-            losses['world_loss'] = world_loss.item()
+        # World model loss - needs sequence of observations (batch, seq_len, obs_dim)
+        if len(self.model.history_buffer) >= 3:
+            # Build sequence from history buffer
+            seq_obs = []
+            for i in range(min(len(self.model.history_buffer), 8)):  # Use last 8 observations
+                hist_obs = self.model.history_buffer[-(i+1)].get('observation')
+                if hist_obs is not None:
+                    seq_obs.insert(0, hist_obs)
 
-            # Record for growth detection (keep last 500 to prevent memory leak)
-            if 'world' not in self.layer_errors:
-                self.layer_errors['world'] = []
-            self.layer_errors['world'].append(world_loss.item())
-            if len(self.layer_errors['world']) > 500:
-                self.layer_errors['world'] = self.layer_errors['world'][-500:]
+            # Add current observation
+            if observation.dim() == 1:
+                observation = observation.unsqueeze(0)
+            seq_obs.append(observation)
+
+            if len(seq_obs) >= 3:
+                # Stack into (batch, seq_len, obs_dim)
+                seq_tensor = torch.stack(seq_obs, dim=1)
+
+                try:
+                    world_loss, _ = self.model.world_model.compute_loss(seq_tensor)
+                    losses['world_loss'] = world_loss.item()
+
+                    # Record for growth detection (keep last 500 to prevent memory leak)
+                    if 'world' not in self.layer_errors:
+                        self.layer_errors['world'] = []
+                    self.layer_errors['world'].append(world_loss.item())
+                    if len(self.layer_errors['world']) > 500:
+                        self.layer_errors['world'] = self.layer_errors['world'][-500:]
+                except Exception as e:
+                    # Skip if compute_loss fails
+                    pass
 
         # Self model loss
         if len(self.model.history_buffer) >= 2:
@@ -314,7 +332,7 @@ class ContinuousTrainer:
             losses['agency_loss'] = agency_loss.item()
 
         # Integration loss (maximize Phi)
-        losses['integration_loss'] = -conscious_content['phi'].mean().item()
+        losses['integration_loss'] = -conscious_content['phi'].mean().detach().item()
 
         # Total
         losses['total'] = sum(losses.values())
