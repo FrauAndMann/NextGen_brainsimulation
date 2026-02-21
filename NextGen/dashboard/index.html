@@ -4,343 +4,158 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SYNAPSE Neural Control Center</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #050810;
-            color: #e4e4e7;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(0.95); } }
-        @keyframes glow { 0%, 100% { box-shadow: 0 0 5px currentColor; } 50% { box-shadow: 0 0 20px currentColor, 0 0 30px currentColor; } }
+        body { font-family: 'Inter', sans-serif; background: #050810; color: #e4e4e7; min-height: 100vh; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
         @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes ripple { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(4); opacity: 0; } }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
-        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-        @keyframes spike { from { opacity: 1; transform: scaleY(1); } to { opacity: 0; transform: scaleY(0.2); } }
-        @keyframes breathe { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+        @keyframes spike { from { opacity: 1; } to { opacity: 0; } }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div id="root"><div style="padding:40px;text-align:center;color:#666">Loading SYNAPSE Dashboard...</div></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef, useCallback, useMemo } = React;
-
-        // ═══════════════════════════════════════════════════════════════
-        // CONSTANTS & CONFIGURATION
-        // ═══════════════════════════════════════════════════════════════
-
+        const { useState, useEffect, useRef } = React;
         const API = "http://localhost:8000";
 
-        const POPULATIONS = [
-            { id: "sensory", label: "Sensory Input", color: "#06b6d4", icon: "👁️" },
-            { id: "pred_l1", label: "Prediction L1", color: "#0ea5e9", icon: "🔮" },
-            { id: "assoc", label: "Association", color: "#10b981", icon: "🧩" },
-            { id: "pfc", label: "Prefrontal", color: "#f59e0b", icon: "🎯" },
-            { id: "hippo", label: "Hippocampus", color: "#a855f7", icon: "💾" },
-            { id: "amygdala", label: "Amygdala", color: "#ef4444", icon: "❤️" },
-            { id: "selfmodel", label: "Self-Model", color: "#22c55e", icon: "🪞" },
-            { id: "gw_hub", label: "Global Workspace", color: "#eab308", icon: "🌐" },
-        ];
+        // Helpers
+        const clamp = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
+        const hexToRgb = (hex) => { const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16); return r+","+g+","+b; };
+        const formatTime = (s) => { if(!s) return "0s"; const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=Math.floor(s%60); return h>0 ? h+"h "+m+"m" : m>0 ? m+"m "+sec+"s" : sec+"s"; };
+        const formatNum = (n) => n ? n.toLocaleString() : "0";
 
-        const NEURO = [
-            { id: "dopamine", label: "Дофамин", color: "#fbbf24", desc: "Награда, мотивация" },
-            { id: "serotonin", label: "Серотонин", color: "#06b6d4", desc: "Настроение, спокойствие" },
-            { id: "norepinephrine", label: "Норадреналин", color: "#f43f5e", desc: "Внимание, энергия" },
-            { id: "oxytocin", label: "Окситоцин", color: "#22c55e", desc: "Связь, доверие" },
-            { id: "cortisol", label: "Кортизол", color: "#f97316", desc: "Стресс, тревога" },
-        ];
-
-        const DATA_TYPES = [
-            { id: "synthetic", label: "Синтетические данные", icon: "🧪", desc: "Автоматическая генерация" },
-            { id: "images", label: "Изображения", icon: "🖼️", desc: "Фотографии, картинки" },
-            { id: "text", label: "Текст", icon: "📝", desc: "Книги, документы" },
-            { id: "rl", label: "RL Окружение", icon: "🎮", desc: "OpenAI Gym" },
-            { id: "timeseries", label: "Временные ряды", icon: "📈", desc: "Датчики, финансы" },
-        ];
-
-        const RL_ENVS = ["CartPole-v1", "MountainCar-v0", "Pendulum-v1", "Acrobot-v1"];
-
-        // ═══════════════════════════════════════════════════════════════
-        // UTILITY FUNCTIONS
-        // ═══════════════════════════════════════════════════════════════
-
-        const clamp = (v, mn = 0, mx = 1) => Math.max(mn, Math.min(mx, v));
-        const hexToRgb = (hex) => { const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16); return `${r},${g},${b}`; };
-        const formatTime = (secs) => { if (!secs) return "0s"; const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = Math.floor(secs % 60); return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`; };
-        const formatNumber = (n) => n?.toLocaleString() || "0";
-
-        async function api(path, method = "GET", body = null) {
+        async function api(path, method, body) {
             try {
                 const opts = { method, headers: { "Content-Type": "application/json" } };
                 if (body) opts.body = JSON.stringify(body);
                 const res = await fetch(API + path, opts);
                 return await res.json();
-            } catch (e) {
-                console.error("API error:", e);
-                return null;
-            }
+            } catch (e) { return null; }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // UI COMPONENTS
-        // ═══════════════════════════════════════════════════════════════
+        const POPULATIONS = [
+            { id: "sensory", label: "Sensory", color: "#06b6d4" },
+            { id: "pred_l1", label: "Predict", color: "#0ea5e9" },
+            { id: "assoc", label: "Assoc", color: "#10b981" },
+            { id: "pfc", label: "PFC", color: "#f59e0b" },
+            { id: "hippo", label: "Hippo", color: "#a855f7" },
+            { id: "amygdala", label: "Amyg", color: "#ef4444" },
+            { id: "selfmodel", label: "Self", color: "#22c55e" },
+            { id: "gw_hub", label: "GW", color: "#eab308" },
+        ];
 
-        // Button Component
-        function Button({ children, onClick, variant = "default", size = "md", disabled, loading, icon, fullWidth }) {
-            const variants = {
-                default: { bg: "rgba(255,255,255,0.1)", hover: "rgba(255,255,255,0.15)", color: "#fff" },
-                primary: { bg: "#06b6d4", hover: "#0891b2", color: "#000" },
-                success: { bg: "#22c55e", hover: "#16a34a", color: "#000" },
-                warning: { bg: "#f59e0b", hover: "#d97706", color: "#000" },
-                danger: { bg: "#ef4444", hover: "#dc2626", color: "#fff" },
-                ghost: { bg: "transparent", hover: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.7)" },
+        const NEURO = [
+            { id: "dopamine", label: "Dopamine", color: "#fbbf24" },
+            { id: "serotonin", label: "Serotonin", color: "#06b6d4" },
+            { id: "norepinephrine", label: "Norepinephrine", color: "#f43f5e" },
+            { id: "oxytocin", label: "Oxytocin", color: "#22c55e" },
+            { id: "cortisol", label: "Cortisol", color: "#f97316" },
+        ];
+
+        const DATA_TYPES = [
+            { id: "synthetic", label: "Synthetic", icon: "🧪" },
+            { id: "images", label: "Images", icon: "🖼️" },
+            { id: "text", label: "Text", icon: "📝" },
+            { id: "rl", label: "RL Environment", icon: "🎮" },
+            { id: "timeseries", label: "Time Series", icon: "📈" },
+        ];
+
+        // Components
+        function Button({ children, onClick, variant, disabled, icon }) {
+            const colors = {
+                default: { bg: "rgba(255,255,255,0.1)", c: "#fff" },
+                primary: { bg: "#06b6d4", c: "#000" },
+                success: { bg: "#22c55e", c: "#000" },
+                warning: { bg: "#f59e0b", c: "#000" },
+                danger: { bg: "#ef4444", c: "#fff" },
             };
-            const sizes = { sm: { py: 6, px: 12, fs: 11 }, md: { py: 10, px: 16, fs: 13 }, lg: { py: 14, px: 24, fs: 15 } };
-            const v = variants[variant] || variants.default;
-            const s = sizes[size] || sizes.md;
-
+            const v = colors[variant] || colors.default;
             return (
-                <button
-                    onClick={onClick}
-                    disabled={disabled || loading}
-                    style={{
-                        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-                        padding: `${s.py}px ${s.px}px`, borderRadius: 10, border: "none",
-                        background: v.bg, color: v.color, fontSize: s.fs, fontWeight: 500,
-                        cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
-                        transition: "all 0.2s ease", width: fullWidth ? "100%" : "auto",
-                        fontFamily: "'Inter', sans-serif", position: "relative", overflow: "hidden",
-                    }}
-                >
-                    {loading && <span style={{ animation: "spin 1s linear infinite" }}>⏳</span>}
-                    {icon && !loading && <span>{icon}</span>}
-                    {children}
-                </button>
+                <button onClick={onClick} disabled={disabled} style={{
+                    padding: "12px 20px", borderRadius: 10, border: "none",
+                    background: v.bg, color: v.c, fontSize: 14, fontWeight: 500,
+                    cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
+                    display: "inline-flex", alignItems: "center", gap: 8, transition: "all 0.2s",
+                }}>{icon && <span>{icon}</span>}{children}</button>
             );
         }
 
-        // Card Component
-        function Card({ children, title, subtitle, icon, action, noPadding, glow, glowColor }) {
+        function Card({ title, icon, children }) {
             return (
-                <div style={{
-                    background: "rgba(255,255,255,0.03)",
-                    borderRadius: 16, border: "1px solid rgba(255,255,255,0.06)",
-                    overflow: "hidden", boxShadow: glow ? `0 0 30px rgba(${hexToRgb(glowColor || "#06b6d4")}, 0.1)` : "none",
-                }}>
+                <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 16, border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
                     {title && (
-                        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
-                                <div>
-                                    <div style={{ fontSize: 14, fontWeight: 600, color: "#fff" }}>{title}</div>
-                                    {subtitle && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{subtitle}</div>}
-                                </div>
-                            </div>
-                            {action}
+                        <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.04)", display: "flex", alignItems: "center", gap: 10 }}>
+                            {icon && <span style={{ fontSize: 18 }}>{icon}</span>}
+                            <span style={{ fontSize: 14, fontWeight: 600 }}>{title}</span>
                         </div>
                     )}
-                    <div style={{ padding: noPadding ? 0 : 16 }}>
-                        {children}
-                    </div>
+                    <div style={{ padding: 16 }}>{children}</div>
                 </div>
             );
         }
 
-        // Progress Bar Component
-        function ProgressBar({ value, max = 100, color = "#06b6d4", size = "md", showLabel, label }) {
-            const percent = Math.min((value / max) * 100, 100);
-            const heights = { sm: 4, md: 8, lg: 12 };
-            const height = heights[size] || heights.md;
-
+        function ProgressBar({ value, color, label }) {
+            const percent = Math.min(value, 100);
             return (
                 <div>
-                    {(showLabel || label) && (
+                    {label && (
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{label || "Progress"}</span>
+                            <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{label}</span>
                             <span style={{ fontSize: 12, fontWeight: 600, color }}>{Math.round(percent)}%</span>
                         </div>
                     )}
-                    <div style={{ height, background: "rgba(255,255,255,0.08)", borderRadius: height / 2, overflow: "hidden" }}>
-                        <div style={{
-                            height: "100%", width: `${percent}%`,
-                            background: `linear-gradient(90deg, ${color}cc, ${color})`,
-                            borderRadius: height / 2,
-                            transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
-                            boxShadow: `0 0 10px ${color}66`,
-                        }} />
+                    <div style={{ height: 8, background: "rgba(255,255,255,0.08)", borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: percent + "%", background: color, borderRadius: 4, transition: "width 0.5s" }} />
                     </div>
                 </div>
             );
         }
 
-        // Metric Card Component
-        function MetricCard({ label, value, target, color, icon, trend }) {
+        function MetricCard({ label, value, color, target }) {
             const percent = target ? Math.min((value / target) * 100, 100) : 0;
-            const achieved = target && value >= target;
-
             return (
-                <div style={{
-                    padding: 16, borderRadius: 12,
-                    background: "rgba(255,255,255,0.02)", border: `1px solid rgba(${hexToRgb(color)}, ${achieved ? 0.3 : 0.1})`,
-                    transition: "all 0.3s ease",
-                }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                        {icon && <span style={{ fontSize: 16 }}>{icon}</span>}
-                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>{label}</span>
-                        {achieved && <span style={{ fontSize: 10, color: "#22c55e" }}>✓</span>}
+                <div style={{ padding: 12, borderRadius: 10, background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "'JetBrains Mono', monospace" }}>
+                        {typeof value === "number" ? value.toFixed(3) : value}
                     </div>
-                    <div style={{ fontSize: 28, fontWeight: 700, color, fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>
-                        {typeof value === 'number' ? value.toFixed(3) : value}
+                    {target && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>Target: {target}</div>}
+                </div>
+            );
+        }
+
+        function NeuroGauge({ label, value, color }) {
+            return (
+                <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,0.02)", marginBottom: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{label}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color }}>{Math.round(value * 100)}%</span>
                     </div>
-                    {target && (
-                        <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>
-                            Target: {target} ({Math.round(percent)}%)
-                        </div>
-                    )}
-                    <div style={{ marginTop: 8 }}>
-                        <ProgressBar value={percent} color={color} size="sm" />
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: (value * 100) + "%", background: color, borderRadius: 2, transition: "width 0.3s" }} />
                     </div>
                 </div>
             );
         }
 
-        // Select Component
-        function Select({ value, onChange, options, placeholder, icon }) {
-            return (
-                <div style={{ position: "relative" }}>
-                    <select
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        style={{
-                            width: "100%", padding: "12px 40px 12px 16px",
-                            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: 10, color: "#fff", fontSize: 13,
-                            fontFamily: "'Inter', sans-serif", cursor: "pointer",
-                            appearance: "none", outline: "none",
-                        }}
-                    >
-                        {placeholder && <option value="" disabled>{placeholder}</option>}
-                        {options.map(opt => (
-                            <option key={opt.id || opt} value={opt.id || opt} style={{ background: "#1a1a2e", color: "#fff" }}>
-                                {opt.icon ? `${opt.icon} ` : ''}{opt.label || opt}
-                            </option>
-                        ))}
-                    </select>
-                    <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "rgba(255,255,255,0.4)" }}>▼</span>
-                </div>
-            );
-        }
-
-        // Input Component
-        function Input({ value, onChange, placeholder, type = "text", icon }) {
-            return (
-                <div style={{ position: "relative" }}>
-                    {icon && <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }}>{icon}</span>}
-                    <input
-                        type={type}
-                        value={value}
-                        onChange={(e) => onChange(e.target.value)}
-                        placeholder={placeholder}
-                        style={{
-                            width: "100%", padding: icon ? "12px 16px 12px 42px" : "12px 16px",
-                            background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: 10, color: "#fff", fontSize: 13,
-                            fontFamily: "'Inter', sans-serif", outline: "none",
-                            transition: "border-color 0.2s",
-                        }}
-                    />
-                </div>
-            );
-        }
-
-        // Tabs Component
-        function Tabs({ tabs, activeTab, onChange }) {
-            return (
-                <div style={{ display: "flex", gap: 4, padding: 4, background: "rgba(255,255,255,0.03)", borderRadius: 12 }}>
-                    {tabs.map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => onChange(tab.id)}
-                            style={{
-                                flex: 1, padding: "10px 16px", border: "none", borderRadius: 8,
-                                background: activeTab === tab.id ? "rgba(255,255,255,0.1)" : "transparent",
-                                color: activeTab === tab.id ? "#fff" : "rgba(255,255,255,0.5)",
-                                fontSize: 12, fontWeight: 500, cursor: "pointer",
-                                transition: "all 0.2s ease", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                            }}
-                        >
-                            {tab.icon && <span>{tab.icon}</span>}
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-            );
-        }
-
-        // Alert Component
-        function Alert({ type = "info", children, onClose }) {
-            const types = {
-                info: { bg: "rgba(6,182,212,0.1)", border: "#06b6d4", icon: "ℹ️" },
-                success: { bg: "rgba(34,197,94,0.1)", border: "#22c55e", icon: "✓" },
-                warning: { bg: "rgba(245,158,11,0.1)", border: "#f59e0b", icon: "⚠️" },
-                error: { bg: "rgba(239,68,68,0.1)", border: "#ef4444", icon: "✕" },
-            };
-            const t = types[type] || types.info;
-
-            return (
-                <div style={{
-                    padding: "14px 16px", borderRadius: 12, background: t.bg,
-                    border: `1px solid ${t.border}33`, display: "flex", alignItems: "flex-start", gap: 12,
-                    animation: "slideIn 0.3s ease",
-                }}>
-                    <span style={{ fontSize: 16 }}>{t.icon}</span>
-                    <div style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>{children}</div>
-                    {onClose && (
-                        <button onClick={onClose} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 18 }}>×</button>
-                    )}
-                </div>
-            );
-        }
-
-        // Spike Raster Visualization
         function SpikeRaster({ spikes }) {
             return (
-                <div style={{ position: "relative", height: "100%", overflow: "hidden", background: "rgba(0,0,0,0.2)", borderRadius: 8 }}>
+                <div style={{ position: "relative", height: 150, background: "rgba(0,0,0,0.2)", borderRadius: 8, overflow: "hidden" }}>
                     {POPULATIONS.map((pop, i) => (
-                        <div key={pop.id} style={{
-                            position: "absolute", left: 0, right: 0,
-                            top: `${(i / POPULATIONS.length) * 100}%`,
-                            height: `${100 / POPULATIONS.length}%`,
-                            borderBottom: "1px solid rgba(255,255,255,0.03)",
-                            display: "flex", alignItems: "center",
-                        }}>
-                            <span style={{ fontSize: 9, color: pop.color, width: 32, paddingLeft: 8, fontFamily: "'JetBrains Mono', monospace", opacity: 0.7 }}>
-                                {pop.id.slice(0, 4).toUpperCase()}
-                            </span>
+                        <div key={pop.id} style={{ position: "absolute", left: 0, right: 0, top: (i * 12.5) + "%", height: "12.5%", display: "flex", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                            <span style={{ fontSize: 8, color: pop.color, width: 30, paddingLeft: 6, fontFamily: "monospace" }}>{pop.id.slice(0, 3).toUpperCase()}</span>
                             <div style={{ flex: 1, position: "relative", height: "100%" }}>
-                                {spikes.filter(s => s.pop?.id === pop.id).map(s => (
-                                    <div key={s.id} style={{
-                                        position: "absolute", left: `${s.x * 100}%`, top: "50%",
-                                        transform: "translateY(-50%)", width: s.size, height: s.size * 2,
-                                        background: pop.color, borderRadius: 2,
-                                        boxShadow: `0 0 ${s.size * 3}px ${pop.color}`,
-                                        animation: "spike 0.2s ease-out forwards",
-                                    }} />
+                                {spikes.filter(s => s.pop && s.pop.id === pop.id).map(s => (
+                                    <div key={s.id} style={{ position: "absolute", left: (s.x * 100) + "%", top: "50%", transform: "translateY(-50%)", width: s.size, height: s.size * 2, background: pop.color, borderRadius: 2, animation: "spike 0.2s forwards" }} />
                                 ))}
                             </div>
                         </div>
@@ -349,451 +164,275 @@
             );
         }
 
-        // Neuro Gauge Component
-        function NeuroGauge({ label, value, color, desc }) {
-            return (
-                <div style={{
-                    padding: "12px 14px", borderRadius: 12,
-                    background: "rgba(255,255,255,0.02)",
-                    border: `1px solid rgba(${hexToRgb(color)}, 0.15)`,
-                }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{label}</span>
-                        <span style={{ fontSize: 13, fontWeight: 600, color, fontFamily: "'JetBrains Mono', monospace" }}>
-                            {Math.round(value * 100)}%
-                        </span>
-                    </div>
-                    <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
-                        <div style={{
-                            height: "100%", width: `${value * 100}%",
-                            background: `linear-gradient(90deg, ${color}99, ${color})`,
-                            borderRadius: 3, transition: "width 0.4s ease",
-                            boxShadow: `0 0 8px ${color}44`,
-                        }} />
-                    </div>
-                    {desc && <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", marginTop: 4 }}>{desc}</div>}
-                </div>
-            );
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // MAIN APP
-        // ═══════════════════════════════════════════════════════════════
-
         function App() {
-            // ── State ──────────────────────────────────────────────────
-            const [activeTab, setActiveTab] = useState("dashboard");
             const [connected, setConnected] = useState(false);
             const [status, setStatus] = useState({ state: "idle", step: 0, elapsed_seconds: 0 });
-            const [metrics, setMetrics] = useState({ phi: 0, agency: 0, integration_score: 0, meta_confidence: 0 });
-            const [neurochemistry, setNeurochemistry] = useState({});
-            const [checkpoints, setCheckpoints] = useState([]);
+            const [metrics, setMetrics] = useState({ phi: 0, agency: 0, integration_score: 0 });
+            const [neuro, setNeuro] = useState({});
             const [messages, setMessages] = useState([]);
             const [chatInput, setChatInput] = useState("");
-            const [systemInfo, setSystemInfo] = useState({});
-
-            // Data config state
-            const [dataConfig, setDataConfig] = useState({ data_type: "synthetic", data_path: null, env_name: "CartPole-v1" });
-            const [scanResult, setScanResult] = useState(null);
+            const [dataConfig, setDataConfig] = useState({ data_type: "synthetic" });
+            const [showModal, setShowModal] = useState(false);
             const [scanPath, setScanPath] = useState("");
+            const [scanResult, setScanResult] = useState(null);
 
-            // Simulation state for visuals
             const [popActivity, setPopActivity] = useState(() => Object.fromEntries(POPULATIONS.map(p => [p.id, Math.random() * 0.4 + 0.1])));
             const [spikes, setSpikes] = useState([]);
-            const [showDataModal, setShowDataModal] = useState(false);
 
-            const wsRef = useRef();
             const chatRef = useRef();
 
-            // ── Effects ────────────────────────────────────────────────
-
-            // WebSocket connection
+            // WebSocket
             useEffect(() => {
                 let ws;
                 const connect = () => {
                     ws = new WebSocket("ws://localhost:8000/ws");
                     ws.onopen = () => setConnected(true);
                     ws.onmessage = (e) => {
-                        const data = JSON.parse(e.data);
-                        if (data.state) setStatus(prev => ({ ...prev, ...data }));
-                        if (data.phi !== undefined) setMetrics(prev => ({ ...prev, phi: data.phi, agency: data.agency, integration_score: data.integration_score }));
-                        if (data.neurochemistry) setNeurochemistry(data.neurochemistry);
+                        const d = JSON.parse(e.data);
+                        if (d.state) setStatus(s => ({ ...s, ...d }));
+                        if (d.phi !== undefined) setMetrics(m => ({ ...m, phi: d.phi, agency: d.agency }));
+                        if (d.neurochemistry) setNeuro(d.neurochemistry);
                     };
                     ws.onclose = () => { setConnected(false); setTimeout(connect, 2000); };
-                    wsRef.current = ws;
                 };
                 connect();
-                return () => ws?.close();
+                return () => ws && ws.close();
             }, []);
 
-            // Simulation loop for visuals
+            // Simulation
             useEffect(() => {
                 const id = setInterval(() => {
-                    setPopActivity(prev => {
-                        const next = { ...prev };
-                        POPULATIONS.forEach(p => { next[p.id] = clamp(prev[p.id] + (Math.random() - 0.49) * 0.08, 0.02, 0.95); });
-                        return next;
+                    setPopActivity(p => {
+                        const n = { ...p };
+                        POPULATIONS.forEach(x => { n[x.id] = clamp(p[x.id] + (Math.random() - 0.49) * 0.08, 0.02, 0.95); });
+                        return n;
                     });
-                    setSpikes(Array.from({ length: Math.floor(Math.random() * 15 + 3) }, () => ({
+                    setSpikes(Array.from({ length: Math.floor(Math.random() * 10 + 3) }, () => ({
                         x: Math.random(), pop: POPULATIONS[Math.floor(Math.random() * POPULATIONS.length)], size: Math.random() * 3 + 1, id: Math.random()
                     })));
                 }, 250);
                 return () => clearInterval(id);
             }, []);
 
-            // Load initial data
+            // Load data
             useEffect(() => {
                 const load = async () => {
-                    const s = await api("/api/status"); if (s) setStatus(prev => ({ ...prev, ...s }));
-                    const m = await api("/api/metrics"); if (m) setMetrics(prev => ({ ...prev, ...m }));
-                    const n = await api("/api/neurochemistry"); if (n) setNeurochemistry(n);
-                    const c = await api("/api/checkpoints"); if (c) setCheckpoints(c);
-                    const h = await api("/api/chat/history"); if (h) setMessages(h);
-                    const dc = await api("/api/data/config"); if (dc) setDataConfig(dc);
-                    const si = await api("/api/system/info"); if (si) setSystemInfo(si);
+                    const s = await api("/api/status", "GET"); if (s) setStatus(p => ({ ...p, ...s }));
+                    const m = await api("/api/metrics", "GET"); if (m) setMetrics(p => ({ ...p, ...m }));
+                    const n = await api("/api/neurochemistry", "GET"); if (n) setNeuro(n);
+                    const h = await api("/api/chat/history", "GET"); if (h) setMessages(h);
+                    const d = await api("/api/data/config", "GET"); if (d) setDataConfig(d);
                 };
                 load();
                 const iv = setInterval(load, 3000);
                 return () => clearInterval(iv);
             }, []);
 
-            // Scroll chat
             useEffect(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, [messages]);
 
-            // ── Actions ────────────────────────────────────────────────
+            // Actions
+            const start = () => api("/api/training/start", "POST");
+            const pause = () => api("/api/training/pause", "POST");
+            const resume = () => api("/api/training/resume", "POST");
+            const stop = () => { if (confirm("Stop training?")) api("/api/training/stop", "POST"); };
 
-            const startTraining = () => api("/api/training/start", "POST");
-            const pauseTraining = () => api("/api/training/pause", "POST");
-            const resumeTraining = () => api("/api/training/resume", "POST");
-            const stopTraining = () => { if (confirm("Остановить обучение? Прогресс будет сохранён.")) api("/api/training/stop", "POST"); };
-
-            const scanDirectory = async () => {
+            const scanDir = async () => {
                 if (!scanPath) return;
-                const result = await api("/api/data/scan-directory", "POST", { path: scanPath });
-                setScanResult(result);
+                const r = await api("/api/data/scan-directory", "POST", { path: scanPath });
+                setScanResult(r);
             };
 
-            const setDataPath = async (type, path) => {
-                await api("/api/data/config", "POST", { data_type: type, data_path: path });
-                setDataConfig(prev => ({ ...prev, data_type: type, data_path: path }));
+            const saveData = async () => {
+                await api("/api/data/config", "POST", dataConfig);
+                setShowModal(false);
             };
 
             const sendChat = async () => {
                 if (!chatInput.trim()) return;
                 const text = chatInput;
                 setChatInput("");
-                setMessages(prev => [...prev, { from: "user", text, timestamp: new Date().toISOString() }]);
+                setMessages(m => [...m, { from: "user", text, timestamp: new Date().toISOString() }]);
                 const res = await api("/api/chat", "POST", { text });
-                if (res) setMessages(prev => [...prev, { from: "brain", text: res.response, timestamp: new Date().toISOString() }]);
+                if (res) setMessages(m => [...m, { from: "brain", text: res.response, timestamp: new Date().toISOString() }]);
             };
 
-            // ── Derived values ────────────────────────────────────────
-
+            // Derived
             const isRunning = status.state === "running";
             const isPaused = status.state === "paused";
             const isIdle = status.state === "idle";
             const gwWinner = POPULATIONS.reduce((a, b) => popActivity[a.id] > popActivity[b.id] ? a : b, POPULATIONS[0]);
-            const overallProgress = (Math.min(metrics.phi / 0.6, 1) * 35 + Math.min(metrics.agency / 0.7, 1) * 30 + Math.min(metrics.integration_score / 0.6, 1) * 20 + Math.min(metrics.meta_confidence / 0.6, 1) * 15);
-            const lifeStage = status.elapsed_seconds < 3600 ? "Новорождённый" : status.elapsed_seconds < 86400 ? "Младенец" : status.elapsed_seconds < 604800 ? "Ребёнок" : "Взрослый";
-
-            // ── Render ────────────────────────────────────────────────
+            const progress = Math.min(metrics.phi / 0.6, 1) * 35 + Math.min(metrics.agency / 0.7, 1) * 30 + Math.min((metrics.integration_score || 0) / 0.6, 1) * 20;
 
             return (
-                <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+                <div style={{ minHeight: "100vh" }}>
                     {/* Header */}
-                    <header style={{
-                        padding: "12px 24px", background: "rgba(10,15,25,0.95)", backdropFilter: "blur(20px)",
-                        borderBottom: "1px solid rgba(255,255,255,0.05)", position: "sticky", top: 0, zIndex: 100,
-                    }}>
-                        <div style={{ maxWidth: 1600, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                    <div style={{
-                                        width: 10, height: 10, borderRadius: "50%",
-                                        background: connected ? "#22c55e" : "#ef4444",
-                                        boxShadow: connected ? "0 0 15px #22c55e" : "0 0 15px #ef4444",
-                                        animation: "pulse 2s infinite",
-                                    }} />
-                                    <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em" }}>SYNAPSE</span>
-                                </div>
-                                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "'JetBrains Mono', monospace" }}>v3.0</span>
+                    <header style={{ padding: "12px 24px", background: "rgba(10,15,25,0.95)", borderBottom: "1px solid rgba(255,255,255,0.05)", position: "sticky", top: 0, zIndex: 100 }}>
+                        <div style={{ maxWidth: 1400, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                                <div style={{ width: 10, height: 10, borderRadius: "50%", background: connected ? "#22c55e" : "#ef4444", animation: "pulse 2s infinite" }} />
+                                <span style={{ fontSize: 18, fontWeight: 700 }}>SYNAPSE</span>
+                                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontFamily: "monospace" }}>v3.0</span>
                             </div>
-
                             <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
                                 <div style={{ textAlign: "right" }}>
-                                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Прогресс</div>
-                                    <div style={{ fontSize: 16, fontWeight: 600, color: overallProgress > 50 ? "#22c55e" : "#f59e0b" }}>{Math.round(overallProgress)}%</div>
+                                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>PROGRESS</div>
+                                    <div style={{ fontSize: 16, fontWeight: 600, color: progress > 50 ? "#22c55e" : "#f59e0b" }}>{Math.round(progress)}%</div>
                                 </div>
                                 <div style={{ textAlign: "right" }}>
-                                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Шаги</div>
-                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#06b6d4" }}>{formatNumber(status.step)}</div>
+                                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>STEPS</div>
+                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#06b6d4" }}>{formatNum(status.step)}</div>
                                 </div>
                                 <div style={{ textAlign: "right" }}>
-                                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Время</div>
+                                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>TIME</div>
                                     <div style={{ fontSize: 16, fontWeight: 600 }}>{formatTime(status.elapsed_seconds)}</div>
                                 </div>
-                                <div style={{
-                                    padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 500,
+                                <div style={{ padding: "6px 14px", borderRadius: 20, fontSize: 11, fontWeight: 500,
                                     background: isRunning ? "rgba(34,197,94,0.15)" : isPaused ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.05)",
-                                    color: isRunning ? "#22c55e" : isPaused ? "#f59e0b" : "rgba(255,255,255,0.5)",
-                                    border: `1px solid ${isRunning ? "rgba(34,197,94,0.3)" : isPaused ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.1)"}`,
-                                }}>
-                                    {status.state?.toUpperCase() || "IDLE"}
+                                    color: isRunning ? "#22c55e" : isPaused ? "#f59e0b" : "rgba(255,255,255,0.5)" }}>
+                                    {status.state ? status.state.toUpperCase() : "IDLE"}
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    {/* Main Content */}
-                    <main style={{ flex: 1, maxWidth: 1600, margin: "0 auto", padding: 24, width: "100%" }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "320px 1fr 320px", gap: 20, height: "calc(100vh - 140px)" }}>
+                    {/* Main */}
+                    <main style={{ maxWidth: 1400, margin: "0 auto", padding: 24 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "300px 1fr 300px", gap: 20 }}>
 
-                            {/* Left Column */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                                {/* Training Control */}
-                                <Card title="Управление обучением" icon="⚡" glow={isRunning} glowColor="#22c55e">
+                            {/* Left */}
+                            <div>
+                                <Card title="Training Control" icon="⚡">
                                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                        {isIdle || isPaused ? (
-                                            <Button variant="success" size="lg" fullWidth onClick={isPaused ? resumeTraining : startTraining} icon="▶">
-                                                {isPaused ? "ПРОДОЛЖИТЬ" : "НАЧАТЬ ОБУЧЕНИЕ"}
-                                            </Button>
-                                        ) : null}
-                                        {isRunning && (
-                                            <Button variant="warning" size="lg" fullWidth onClick={pauseTraining} icon="⏸">
-                                                ПАУЗА
-                                            </Button>
-                                        )}
-                                        {!isIdle && (
-                                            <Button variant="danger" size="lg" fullWidth onClick={stopTraining} icon="⏹">
-                                                ОСТАНОВИТЬ
-                                            </Button>
-                                        )}
+                                        {isIdle || isPaused ? <Button variant="success" onClick={isPaused ? resume : start} icon="▶">{isPaused ? "RESUME" : "START"}</Button> : null}
+                                        {isRunning && <Button variant="warning" onClick={pause} icon="⏸">PAUSE</Button>}
+                                        {!isIdle && <Button variant="danger" onClick={stop} icon="⏹">STOP</Button>}
                                     </div>
-
                                     <div style={{ marginTop: 16, padding: 12, background: "rgba(255,255,255,0.02)", borderRadius: 8 }}>
-                                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Тип данных</div>
+                                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Data Type</div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                                             <span style={{ fontSize: 20 }}>{DATA_TYPES.find(d => d.id === dataConfig.data_type)?.icon}</span>
-                                            <div>
-                                                <div style={{ fontSize: 13, fontWeight: 500 }}>{DATA_TYPES.find(d => d.id === dataConfig.data_type)?.label}</div>
-                                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>{DATA_TYPES.find(d => d.id === dataConfig.data_type)?.desc}</div>
-                                            </div>
+                                            <span style={{ fontSize: 13 }}>{DATA_TYPES.find(d => d.id === dataConfig.data_type)?.label}</span>
                                         </div>
                                     </div>
-
-                                    <Button variant="ghost" fullWidth style={{ marginTop: 12 }} onClick={() => setShowDataModal(true)} icon="📁">
-                                        Настроить данные
-                                    </Button>
+                                    <Button variant="default" onClick={() => setShowModal(true)} style={{ marginTop: 12 }}>📁 Configure Data</Button>
                                 </Card>
 
-                                {/* Metrics */}
-                                <Card title="Метрики сознания" icon="🧠" subtitle={`Φ = ${metrics.phi.toFixed(3)}`}>
+                                <Card title="Metrics" icon="🧠">
                                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                                        <MetricCard label="Φ (Phi)" value={metrics.phi} target={0.6} color="#eab308" icon="∞" />
-                                        <MetricCard label="Agency" value={metrics.agency} target={0.7} color="#22c55e" icon="🎯" />
-                                    </div>
-                                    <div style={{ marginTop: 10 }}>
-                                        <MetricCard label="Integration" value={metrics.integration_score} target={0.6} color="#06b6d4" icon="🔗" />
+                                        <MetricCard label="Φ (Phi)" value={metrics.phi} color="#eab308" target={0.6} />
+                                        <MetricCard label="Agency" value={metrics.agency} color="#22c55e" target={0.7} />
                                     </div>
                                 </Card>
 
-                                {/* Progress */}
-                                <Card title="Прогресс обучения" icon="📈">
-                                    <ProgressBar value={overallProgress} color={overallProgress > 50 ? "#22c55e" : overallProgress > 25 ? "#f59e0b" : "#ef4444"} size="lg" showLabel label="Общий прогресс" />
-                                    <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-                                        <ProgressBar value={metrics.phi * 100 / 0.6} color="#eab308" size="sm" />
-                                        <ProgressBar value={metrics.agency * 100 / 0.7} color="#22c55e" size="sm" />
-                                    </div>
+                                <Card title="Progress" icon="📈">
+                                    <ProgressBar value={progress} color={progress > 50 ? "#22c55e" : "#f59e0b"} label="Overall" />
                                 </Card>
                             </div>
 
-                            {/* Center Column */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                                {/* Spike Raster */}
-                                <Card title="Нейронная активность" icon="⚡" subtitle={`${spikes.length} спайков`} noPadding>
-                                    <div style={{ height: 180, padding: "0 8px 8px" }}>
-                                        <SpikeRaster spikes={spikes} />
-                                    </div>
+                            {/* Center */}
+                            <div>
+                                <Card title="Neural Activity" icon="⚡">
+                                    <SpikeRaster spikes={spikes} />
                                 </Card>
 
-                                {/* Population Activity */}
-                                <Card title="Активность популяций" icon="🔮">
+                                <Card title="Population Activity" icon="🔮">
                                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                         {POPULATIONS.map(pop => {
-                                            const value = popActivity[pop.id];
-                                            const isWinner = gwWinner.id === pop.id;
+                                            const v = popActivity[pop.id];
+                                            const win = gwWinner.id === pop.id;
                                             return (
-                                                <div key={pop.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                                    <div style={{ width: 4, height: 24, borderRadius: 2, background: isWinner ? pop.color : `${pop.color}44`, boxShadow: isWinner ? `0 0 8px ${pop.color}` : "none", transition: "all 0.3s" }} />
-                                                    <span style={{ fontSize: 11, color: isWinner ? pop.color : "rgba(255,255,255,0.5)", width: 70, fontFamily: "'JetBrains Mono', monospace" }}>{pop.label}</span>
-                                                    <div style={{ flex: 1, height: 4, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" }}>
-                                                        <div style={{ height: "100%", width: `${value * 100}%`, background: pop.color, borderRadius: 2, transition: "width 0.3s" }} />
+                                                <div key={pop.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                                    <div style={{ width: 3, height: 20, borderRadius: 2, background: win ? pop.color : "rgba(255,255,255,0.1)" }} />
+                                                    <span style={{ fontSize: 10, color: win ? pop.color : "rgba(255,255,255,0.5)", width: 60 }}>{pop.label}</span>
+                                                    <div style={{ flex: 1, height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" }}>
+                                                        <div style={{ height: "100%", width: (v * 100) + "%", background: pop.color, borderRadius: 2, transition: "width 0.3s" }} />
                                                     </div>
-                                                    {isWinner && <span style={{ fontSize: 10, color: pop.color }}>★</span>}
+                                                    {win && <span style={{ fontSize: 10, color: pop.color }}>★</span>}
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 </Card>
 
-                                {/* Status Info */}
-                                <Card title="Информация о системе" icon="💻" style={{ flex: 1 }}>
-                                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, lineHeight: 1.8, color: "rgba(255,255,255,0.6)" }}>
-                                        <div>Состояние: <span style={{ color: "#06b6d4" }}>{status.state?.toUpperCase()}</span></div>
-                                        <div>Шагов: <span style={{ color: "#fff" }}>{formatNumber(status.step)}</span></div>
-                                        <div>Семплов: <span style={{ color: "#fff" }}>{formatNumber(status.total_samples)}</span></div>
-                                        <div>GPU: <span style={{ color: systemInfo.cuda_available ? "#22c55e" : "#ef4444" }}>{systemInfo.gpu_name || "CPU"}</span></div>
-                                        <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                                            <div>Φ: <span style={{ color: "#eab308" }}>{metrics.phi.toFixed(4)}</span> (target: 0.6)</div>
-                                            <div>Agency: <span style={{ color: "#22c55e" }}>{metrics.agency.toFixed(4)}</span> (target: 0.7)</div>
-                                            <div>Integration: <span style={{ color: "#06b6d4" }}>{(metrics.integration_score || 0).toFixed(4)}</span></div>
-                                        </div>
+                                <Card title="System Info" icon="💻">
+                                    <div style={{ fontFamily: "monospace", fontSize: 11, lineHeight: 1.8, color: "rgba(255,255,255,0.6)" }}>
+                                        <div>State: <span style={{ color: "#06b6d4" }}>{status.state ? status.state.toUpperCase() : "IDLE"}</span></div>
+                                        <div>Steps: <span style={{ color: "#fff" }}>{formatNum(status.step)}</span></div>
+                                        <div>Samples: <span style={{ color: "#fff" }}>{formatNum(status.total_samples)}</span></div>
                                     </div>
                                 </Card>
                             </div>
 
-                            {/* Right Column */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                                {/* Neurochemistry */}
-                                <Card title="Нейрохимия" icon="🧪">
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                        {NEURO.map(n => (
-                                            <NeuroGauge key={n.id} {...n} value={neurochemistry[n.id] || 0.5} />
-                                        ))}
-                                    </div>
+                            {/* Right */}
+                            <div>
+                                <Card title="Neurochemistry" icon="🧪">
+                                    {NEURO.map(n => <NeuroGauge key={n.id} label={n.label} value={neuro[n.id] || 0.5} color={n.color} />)}
                                 </Card>
 
-                                {/* Chat */}
-                                <Card title="Чат с SYNAPSE" icon="💬" style={{ flex: 1 }} noPadding>
-                                    <div style={{ display: "flex", flexDirection: "column", height: 300 }}>
-                                        <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-                                            {messages.length === 0 ? (
-                                                <div style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.3)" }}>
-                                                    <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
-                                                    <div style={{ fontSize: 12 }}>Начни разговор со мной</div>
-                                                    <div style={{ fontSize: 10, marginTop: 4, color: "rgba(255,255,255,0.2)" }}>Попробуй: "Как ты?" или "Прогресс"</div>
+                                <Card title="Chat" icon="💬">
+                                    <div style={{ height: 200, overflowY: "auto", marginBottom: 12 }} ref={chatRef}>
+                                        {messages.length === 0 ? (
+                                            <div style={{ textAlign: "center", padding: 20, color: "rgba(255,255,255,0.3)" }}>
+                                                <div>Start a conversation</div>
+                                                <div style={{ fontSize: 10, marginTop: 4 }}>Try: "How are you?" or "Progress"</div>
+                                            </div>
+                                        ) : (
+                                            messages.map((m, i) => (
+                                                <div key={i} style={{ marginBottom: 10, textAlign: m.from === "user" ? "right" : "left" }}>
+                                                    <div style={{ display: "inline-block", maxWidth: "85%", padding: "8px 12px", borderRadius: m.from === "user" ? "12px 12px 4px 12px" : "12px 12px 12px 4px", background: m.from === "user" ? "#0891b2" : "rgba(255,255,255,0.05)", fontSize: 12 }}>{m.text}</div>
                                                 </div>
-                                            ) : (
-                                                messages.map((msg, i) => (
-                                                    <div key={i} style={{ marginBottom: 12, textAlign: msg.from === "user" ? "right" : "left" }}>
-                                                        <div style={{
-                                                            display: "inline-block", maxWidth: "85%", padding: "10px 14px",
-                                                            borderRadius: msg.from === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
-                                                            background: msg.from === "user" ? "linear-gradient(135deg, #0891b2, #0e7490)" : "rgba(255,255,255,0.05)",
-                                                            fontSize: 12, lineHeight: 1.5, color: "#fff",
-                                                        }}>
-                                                            {msg.text}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                        <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                                            <div style={{ display: "flex", gap: 8 }}>
-                                                <input
-                                                    value={chatInput}
-                                                    onChange={e => setChatInput(e.target.value)}
-                                                    onKeyDown={e => e.key === "Enter" && sendChat()}
-                                                    placeholder="Напиши сообщение..."
-                                                    style={{
-                                                        flex: 1, padding: "10px 14px", background: "rgba(255,255,255,0.05)",
-                                                        border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#fff",
-                                                        fontSize: 12, outline: "none",
-                                                    }}
-                                                />
-                                                <Button onClick={sendChat} variant="primary">→</Button>
-                                            </div>
-                                            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                                                {["Как ты?", "Прогресс", "Совет"].map(q => (
-                                                    <button key={q} onClick={() => { setChatInput(q); setTimeout(sendChat, 100); }}
-                                                        style={{
-                                                            padding: "4px 10px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)",
-                                                            background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.5)",
-                                                            fontSize: 10, cursor: "pointer",
-                                                        }}>
-                                                        {q}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
+                                            ))
+                                        )}
+                                    </div>
+                                    <div style={{ display: "flex", gap: 8 }}>
+                                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()}
+                                            placeholder="Message..." style={{ flex: 1, padding: "10px 14px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#fff", fontSize: 12, outline: "none" }} />
+                                        <Button variant="primary" onClick={sendChat}>→</Button>
                                     </div>
                                 </Card>
                             </div>
                         </div>
                     </main>
 
-                    {/* Data Configuration Modal */}
-                    {showDataModal && (
-                        <div style={{
-                            position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(4px)",
-                            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-                        }}>
-                            <div style={{
-                                width: 600, maxHeight: "80vh", overflowY: "auto",
-                                background: "#0f1419", borderRadius: 20, border: "1px solid rgba(255,255,255,0.1)",
-                                boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
-                            }}>
-                                <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <h2 style={{ fontSize: 18, fontWeight: 600 }}>Настройка данных для обучения</h2>
-                                    <button onClick={() => setShowDataModal(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 24, cursor: "pointer" }}>×</button>
+                    {/* Modal */}
+                    {showModal && (
+                        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
+                            <div style={{ width: 500, background: "#0f1419", borderRadius: 16, border: "1px solid rgba(255,255,255,0.1)" }}>
+                                <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                    <span style={{ fontSize: 16, fontWeight: 600 }}>Configure Data Source</span>
+                                    <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.5)", fontSize: 20, cursor: "pointer" }}>×</button>
                                 </div>
-                                <div style={{ padding: 24 }}>
-                                    <Alert type="info">Выберите тип данных и укажите путь к данным (если требуется)</Alert>
-
-                                    <div style={{ marginTop: 20 }}>
-                                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>Тип данных</div>
-                                        <Select
-                                            value={dataConfig.data_type}
-                                            onChange={(v) => setDataConfig(prev => ({ ...prev, data_type: v }))}
-                                            options={DATA_TYPES.map(d => ({ id: d.id, label: `${d.icon} ${d.label}`, icon: d.icon }))}
-                                        />
+                                <div style={{ padding: 20 }}>
+                                    <div style={{ marginBottom: 16 }}>
+                                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>Data Type</div>
+                                        <select value={dataConfig.data_type} onChange={e => setDataConfig(p => ({ ...p, data_type: e.target.value }))}
+                                            style={{ width: "100%", padding: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff" }}>
+                                            {DATA_TYPES.map(d => <option key={d.id} value={d.id} style={{ background: "#1a1a2e" }}>{d.icon} {d.label}</option>)}
+                                        </select>
                                     </div>
 
                                     {dataConfig.data_type !== "synthetic" && dataConfig.data_type !== "rl" && (
-                                        <div style={{ marginTop: 16 }}>
-                                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>Путь к папке с данными</div>
+                                        <div style={{ marginBottom: 16 }}>
+                                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>Data Path</div>
                                             <div style={{ display: "flex", gap: 8 }}>
-                                                <Input
-                                                    value={scanPath}
-                                                    onChange={setScanPath}
-                                                    placeholder="D:\Photos или D:\Books"
-                                                    icon="📁"
-                                                />
-                                                <Button onClick={scanDirectory}>Сканировать</Button>
+                                                <input value={scanPath} onChange={e => setScanPath(e.target.value)} placeholder="D:\Photos"
+                                                    style={{ flex: 1, padding: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#fff" }} />
+                                                <Button onClick={scanDir}>Scan</Button>
                                             </div>
-                                        </div>
-                                    )}
-
-                                    {dataConfig.data_type === "rl" && (
-                                        <div style={{ marginTop: 16 }}>
-                                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginBottom: 8 }}>RL Окружение</div>
-                                            <Select
-                                                value={dataConfig.env_name}
-                                                onChange={(v) => setDataConfig(prev => ({ ...prev, env_name: v }))}
-                                                options={RL_ENVS.map(e => ({ id: e, label: e }))}
-                                            />
                                         </div>
                                     )}
 
                                     {scanResult && (
-                                        <div style={{ marginTop: 16, padding: 16, background: "rgba(255,255,255,0.02)", borderRadius: 12 }}>
-                                            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8 }}>Результат сканирования:</div>
-                                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", lineHeight: 1.6 }}>
-                                                <div>Всего файлов: {scanResult.total_files}</div>
-                                                <div>Изображений: {scanResult.images.count}</div>
-                                                <div>Текстовых: {scanResult.text.count}</div>
-                                            </div>
+                                        <div style={{ marginBottom: 16, padding: 12, background: "rgba(255,255,255,0.02)", borderRadius: 8, fontSize: 12 }}>
+                                            <div>Files: {scanResult.total_files}</div>
+                                            <div>Images: {scanResult.images?.count || 0}</div>
+                                            <div>Text: {scanResult.text?.count || 0}</div>
                                         </div>
                                     )}
 
-                                    <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
-                                        <Button variant="primary" fullWidth onClick={async () => {
-                                            await api("/api/data/config", "POST", dataConfig);
-                                            setShowDataModal(false);
-                                        }}>
-                                            Сохранить настройки
-                                        </Button>
-                                        <Button variant="ghost" onClick={() => setShowDataModal(false)}>Отмена</Button>
+                                    <div style={{ display: "flex", gap: 10 }}>
+                                        <Button variant="primary" onClick={saveData}>Save</Button>
+                                        <Button onClick={() => setShowModal(false)}>Cancel</Button>
                                     </div>
                                 </div>
                             </div>
@@ -803,7 +442,6 @@
             );
         }
 
-        // Mount
         const root = ReactDOM.createRoot(document.getElementById("root"));
         root.render(<App />);
     </script>
