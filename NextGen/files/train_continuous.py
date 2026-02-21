@@ -35,6 +35,7 @@ from continuous_learning import (
     run_continuous_training
 )
 from environment import LazySyntheticDataset, BufferedLazyDataset
+from shared_metrics import get_shared_metrics
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -178,6 +179,10 @@ def main():
     # Create controller
     controller = TrainingController(args, trainer)
 
+    # Initialize shared metrics for dashboard
+    shared_metrics = get_shared_metrics()
+    shared_metrics.set_state("running")
+
     # Data stream - using memory-efficient lazy dataset
     print("Creating data stream (memory-efficient mode)...")
     dataset = BufferedLazyDataset(
@@ -250,6 +255,24 @@ def main():
                     'Steps': status['step_count']
                 })
 
+                # Update shared metrics for dashboard
+                shared_metrics.update(
+                    state="running",
+                    step=status['step_count'],
+                    total_samples=status['total_samples'],
+                    elapsed_seconds=status.get('elapsed_seconds', 0),
+                    metrics=metrics,
+                    neurochemistry={
+                        'dopamine': float(model.internal_state[0, 0].detach()) if model.internal_state.dim() > 1 else 0.5,
+                        'serotonin': float(model.internal_state[0, 1].detach()) if model.internal_state.dim() > 1 else 0.5,
+                        'oxytocin': float(model.internal_state[0, 2].detach()) if model.internal_state.dim() > 1 else 0.4,
+                        'cortisol': float(model.internal_state[0, 3].detach()) if model.internal_state.dim() > 1 else 0.3,
+                        'norepinephrine': float(model.internal_state[0, 4].detach()) if model.internal_state.dim() > 1 else 0.4,
+                    },
+                    neurons=status['total_neurons'],
+                    growth_events=status['growth_events']
+                )
+
                 # Print summary every 500 batches
                 if batch_count % 500 == 0:
                     status = trainer.get_status()
@@ -271,6 +294,9 @@ def main():
         traceback.print_exc()
 
     finally:
+        # Update shared metrics state
+        shared_metrics.set_state("stopped")
+
         # Always save on exit
         print()
         print("=" * 60)

@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from config import Config
 from model.self_aware_ai import SelfAwareAI
 from continuous_learning import GrowthConfig, ContinuousTrainer
+from shared_metrics import get_shared_metrics
 
 
 # ── Enums ─────────────────────────────────────────────────────────────
@@ -513,6 +514,9 @@ app.add_middleware(
 config = Config()
 manager = TrainingManager(config)
 
+# Shared metrics for reading from train_continuous.py
+shared_metrics = get_shared_metrics()
+
 
 # ── Training Endpoints ─────────────────────────────────────────────────
 
@@ -523,8 +527,8 @@ async def root():
 
 @app.get("/api/status")
 async def get_status():
-    """Get current status"""
-    return manager.get_status()
+    """Get current status from shared metrics"""
+    return shared_metrics.read()
 
 
 @app.post("/api/training/start")
@@ -620,10 +624,18 @@ async def reset_model():
 
 @app.get("/api/metrics")
 async def get_metrics():
-    """Get current metrics"""
-    if manager.metrics_history:
-        return manager.metrics_history[-1]
-    return {}
+    """Get current metrics from shared metrics"""
+    data = shared_metrics.read()
+    return {
+        "phi": data.get("phi", 0.0),
+        "agency": data.get("agency", 0.0),
+        "integration_score": data.get("integration_score", 0.0),
+        "meta_confidence": data.get("meta_confidence", 0.0),
+        "meta_uncertainty": data.get("meta_uncertainty", 0.0),
+        "self_confidence": data.get("self_confidence", 0.0),
+        "step": data.get("step", 0),
+        "timestamp": data.get("timestamp", "")
+    }
 
 
 @app.get("/api/metrics/history")
@@ -634,8 +646,15 @@ async def get_metrics_history(limit: int = 100):
 
 @app.get("/api/neurochemistry")
 async def get_neurochemistry():
-    """Get neurochemistry"""
-    return manager.get_neurochemistry()
+    """Get neurochemistry from shared metrics"""
+    data = shared_metrics.read()
+    return data.get("neurochemistry", {
+        "dopamine": 0.5,
+        "serotonin": 0.5,
+        "oxytocin": 0.4,
+        "cortisol": 0.3,
+        "norepinephrine": 0.4
+    })
 
 
 # ── Chat Endpoint ────────────────────────────────────────────────────
@@ -681,21 +700,18 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            # Send status update
+            # Send status update from shared metrics
+            data = shared_metrics.read()
             await websocket.send_json({
                 "type": "status",
-                **manager.get_status()
+                **data
             })
-
-            # If running, do a step and send metrics
-            if manager.state == TrainingState.RUNNING:
-                # Metrics already sent by training loop
-                pass
 
             await asyncio.sleep(0.5)
 
     except WebSocketDisconnect:
-        manager.ws_clients.remove(websocket)
+        if websocket in manager.ws_clients:
+            manager.ws_clients.remove(websocket)
 
 
 # ── Run ───────────────────────────────────────────────────────────────
