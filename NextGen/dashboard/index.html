@@ -3,180 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYNAPSE Control Dashboard</title>
+    <title>SYNAPSE Neural Monitor</title>
     <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
         body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background: #0a0e17;
-            color: #e0e0e0;
+            font-family: 'DM Sans', 'Segoe UI', sans-serif;
+            background: #060A12;
+            color: white;
             min-height: 100vh;
-        }
-        .container { padding: 20px; max-width: 1400px; margin: 0 auto; }
-
-        /* Header */
-        .header {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 15px 20px;
-            background: linear-gradient(180deg, #0d1220 0%, #0a0e17 100%);
-            border-bottom: 1px solid #1a2332;
-            margin-bottom: 20px;
-        }
-        .logo { display: flex; align-items: center; gap: 10px; }
-        .logo-dot {
-            width: 12px; height: 12px; border-radius: 50%;
-            background: #4ecdc4; box-shadow: 0 0 10px #4ecdc4;
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .logo-text { font-size: 20px; font-weight: 600; color: #fff; }
-        .status-badge {
-            padding: 6px 14px; border-radius: 20px; font-size: 12px;
-            font-weight: 500; text-transform: uppercase;
-        }
-        .status-idle { background: #2a2a2a; color: #888; }
-        .status-running { background: rgba(78,205,196,0.2); color: #4ecdc4; }
-        .status-paused { background: rgba(255,217,61,0.2); color: #ffd93d; }
-
-        /* Grid */
-        .main-grid {
-            display: grid;
-            grid-template-columns: 300px 1fr 280px;
-            gap: 20px;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(21,101,192,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(78,205,196,0.05) 0%, transparent 40%);
         }
 
-        /* Cards */
-        .card {
-            background: #0d1220;
-            border: 1px solid #1a2332;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        .card-header {
-            padding: 12px 16px;
-            background: #0a0e17;
-            border-bottom: 1px solid #1a2332;
-            font-size: 12px;
-            color: #8892a0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .card-body { padding: 16px; }
-
-        /* Buttons */
-        .btn {
-            padding: 10px 20px;
-            border: none; border-radius: 8px;
-            font-size: 13px; font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex; align-items: center; gap: 6px;
-        }
-        .btn:hover { transform: translateY(-1px); }
-        .btn-primary { background: #4ecdc4; color: #000; }
-        .btn-success { background: #a8e6cf; color: #000; }
-        .btn-warning { background: #ffd93d; color: #000; }
-        .btn-danger { background: #ff6b9d; color: #000; }
-        .btn-secondary { background: #2a3444; color: #fff; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .btn-group { display: flex; gap: 10px; margin-bottom: 15px; }
-        .btn-block { width: 100%; justify-content: center; }
-
-        /* Inputs */
-        .input-group { margin-bottom: 12px; }
-        .input-label { display: block; font-size: 11px; color: #6b7280; margin-bottom: 4px; }
-        .input {
-            width: 100%; padding: 10px 12px;
-            background: #0a0e17; border: 1px solid #1a2332;
-            border-radius: 8px; color: #fff; font-size: 13px;
-        }
-        .input:focus { outline: none; border-color: #4ecdc4; }
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-        /* Metrics */
-        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-        .metric-card {
-            background: linear-gradient(135deg, #0d1220, #0a0e17);
-            border: 1px solid #1a2332;
-            border-radius: 10px; padding: 16px;
-        }
-        .metric-label { font-size: 10px; color: #6b7280; text-transform: uppercase; margin-bottom: 6px; }
-        .metric-value { font-size: 24px; font-weight: 600; }
-        .metric-phi { color: #ffd93d; }
-        .metric-agency { color: #a8e6cf; }
-        .metric-integration { color: #4ecdc4; }
-        .metric-confidence { color: #96ceb4; }
-
-        /* Chart */
-        .chart-container { height: 300px; margin-top: 10px; }
-
-        /* Gauges */
-        .gauge { margin-bottom: 14px; }
-        .gauge-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
-        .gauge-label { font-size: 11px; color: #8892a0; }
-        .gauge-value { font-size: 11px; font-weight: 600; }
-        .gauge-bar { height: 6px; background: #1a2332; border-radius: 3px; overflow: hidden; }
-        .gauge-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-
-        /* Checkpoint list */
-        .checkpoint-list { max-height: 200px; overflow-y: auto; }
-        .checkpoint-item {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 10px; margin-bottom: 8px;
-            background: #0a0e17; border-radius: 8px;
-        }
-        .checkpoint-info { font-size: 11px; }
-        .checkpoint-name { color: #8892a0; }
-        .checkpoint-size { color: #4a5568; font-size: 10px; }
-
-        /* Chat */
-        .chat-container { display: flex; flex-direction: column; height: 100%; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 10px; }
-        .chat-message { margin-bottom: 10px; }
-        .chat-bubble {
-            max-width: 85%; padding: 10px 14px; border-radius: 12px;
-            font-size: 12px; line-height: 1.5;
-        }
-        .chat-bubble-user {
-            background: linear-gradient(135deg, #1565c0, #0d47a1);
-            margin-left: auto;
-        }
-        .chat-bubble-brain {
-            background: #1a2332;
-        }
-        .chat-input-container {
-            padding: 10px;
-            border-top: 1px solid #1a2332;
-            display: flex; gap: 8px;
-        }
-        .chat-input {
-            flex: 1; padding: 10px 14px;
-            background: #0a0e17; border: 1px solid #1a2332;
-            border-radius: 8px; color: #fff; font-size: 12px;
-        }
-
-        /* Info bar */
-        .info-bar {
-            display: flex; gap: 20px;
-            font-size: 11px; color: #6b7280;
-        }
-
-        /* Loading */
-        .loading { text-align: center; padding: 40px; color: #4ecdc4; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes spike { from { opacity: 1; transform: translateY(-50%) scaleY(1); } to { opacity: 0; transform: translateY(-50%) scaleY(0.3); } }
+        @keyframes glow { 0%, 100% { box-shadow: 0 0 8px currentColor; } 50% { box-shadow: 0 0 16px currentColor; } }
     </style>
 </head>
 <body>
-    <div id="root"><div class="loading">Loading SYNAPSE Dashboard...</div></div>
+    <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // ── Constants ────────────────────────────────────────────────────────────
+        const POPULATIONS = [
+            { id: "sensory",   label: "Sensory Input",       color: "#4ECDC4", short: "SEN" },
+            { id: "pred_l1",   label: "Prediction L1",       color: "#45B7D1", short: "PL1" },
+            { id: "assoc",     label: "Association Cortex",  color: "#96CEB4", short: "ASC" },
+            { id: "pfc",       label: "Prefrontal Attractor",color: "#FFEAA7", short: "PFC" },
+            { id: "hippo",     label: "Hippocampus",         color: "#DDA0DD", short: "HPC" },
+            { id: "amygdala",  label: "Amygdala",            color: "#FF6B9D", short: "AMY" },
+            { id: "selfmodel", label: "Self-Model",          color: "#A8E6CF", short: "SLF" },
+            { id: "gw_hub",    label: "Global Workspace",    color: "#FFD93D", short: "GWS" },
+        ];
+
+        const NEURO = [
+            { id: "dopamine",     label: "Дофамин",      color: "#FFD93D" },
+            { id: "serotonin",    label: "Серотонин",    color: "#4ECDC4" },
+            { id: "norepinephrine", label: "Норадреналин", color: "#FF6B9D" },
+            { id: "oxytocin",     label: "Окситоцин",    color: "#A8E6CF" },
+            { id: "cortisol",     label: "Кортизол",     color: "#FF8C42" },
+        ];
 
         const API = "http://localhost:8000";
 
-        // API helper
+        // ── Helper Functions ──────────────────────────────────────────────────────
+        function clamp(v, mn = 0, mx = 1) { return Math.max(mn, Math.min(mx, v)); }
+        function hexToRgb(hex) {
+            const r = parseInt(hex.slice(1,3),16);
+            const g = parseInt(hex.slice(3,5),16);
+            const b = parseInt(hex.slice(5,7),16);
+            return `${r},${g},${b}`;
+        }
+
         async function api(path, method = "GET", body = null) {
             try {
                 const opts = { method, headers: { "Content-Type": "application/json" } };
@@ -189,26 +79,186 @@
             }
         }
 
+        // ── Sub-components ────────────────────────────────────────────────────────
+        function SpikeCanvas({ spikes }) {
+            return (
+                <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+                    {POPULATIONS.map((pop, pi) => (
+                        <div key={pop.id} style={{
+                            position: "absolute", left: 0, right: 0,
+                            top: `${(pi / POPULATIONS.length) * 100}%`,
+                            height: `${100 / POPULATIONS.length}%`,
+                            borderBottom: "1px solid rgba(255,255,255,0.04)",
+                            display: "flex", alignItems: "center",
+                        }}>
+                            <span style={{
+                                fontSize: 9, color: "rgba(255,255,255,0.3)",
+                                width: 28, flexShrink: 0, paddingLeft: 4,
+                                fontFamily: "'DM Mono', monospace"
+                            }}>{pop.short}</span>
+                            <div style={{ flex: 1, position: "relative", height: "100%" }}>
+                                {spikes.filter(s => s.pop?.id === pop.id).map(s => (
+                                    <div key={s.id} style={{
+                                        position: "absolute", left: `${s.x * 100}%`,
+                                        top: "50%", transform: "translateY(-50%)",
+                                        width: s.size, height: Math.min(s.size * 3, 14),
+                                        background: pop.color, borderRadius: 1,
+                                        boxShadow: `0 0 ${s.size * 2}px ${pop.color}`,
+                                        animation: "spike 0.3s ease-out forwards",
+                                    }} />
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        function NeuroGauge({ label, color, value }) {
+            return (
+                <div style={{
+                    padding: "8px 10px", background: "rgba(255,255,255,0.03)",
+                    borderRadius: 8, border: `1px solid rgba(${hexToRgb(color)},0.2)`
+                }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", fontFamily: "'DM Mono', monospace" }}>{label}</span>
+                        <span style={{ fontSize: 11, color, fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>{Math.round(value * 100)}%</span>
+                    </div>
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{
+                            height: "100%", width: `${value * 100}%`,
+                            background: `linear-gradient(90deg, ${color}88, ${color})`,
+                            borderRadius: 2, transition: "width 0.3s ease",
+                            boxShadow: `0 0 6px ${color}`
+                        }} />
+                    </div>
+                </div>
+            );
+        }
+
+        function PopBar({ pop, value, isWinner }) {
+            return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+                    <div style={{
+                        width: 3, height: 20, borderRadius: 2,
+                        background: isWinner ? pop.color : "rgba(255,255,255,0.15)",
+                        boxShadow: isWinner ? `0 0 8px ${pop.color}` : "none",
+                        flexShrink: 0, transition: "all 0.3s"
+                    }} />
+                    <span style={{
+                        fontSize: 10, color: isWinner ? pop.color : "rgba(255,255,255,0.45)",
+                        width: 80, fontFamily: "'DM Mono', monospace", transition: "color 0.3s"
+                    }}>{pop.short}</span>
+                    <div style={{ flex: 1, height: 3, background: "rgba(255,255,255,0.08)", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{
+                            height: "100%", width: `${value * 100}%`,
+                            background: isWinner ? pop.color : `${pop.color}55`,
+                            borderRadius: 2, transition: "width 0.3s ease"
+                        }} />
+                    </div>
+                    {isWinner && (
+                        <div style={{
+                            width: 6, height: 6, borderRadius: "50%",
+                            background: pop.color, boxShadow: `0 0 8px ${pop.color}`,
+                            animation: "pulse 1s infinite"
+                        }} />
+                    )}
+                </div>
+            );
+        }
+
+        function MetricCard({ label, value, color, target }) {
+            return (
+                <div style={{
+                    padding: "10px 14px", background: "rgba(255,255,255,0.03)",
+                    borderRadius: 10, border: `1px solid rgba(${hexToRgb(color)},0.2)`,
+                    display: "flex", flexDirection: "column", alignItems: "center"
+                }}>
+                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace", marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 24, fontWeight: 600, color, fontFamily: "'DM Mono', monospace" }}>
+                        {typeof value === 'number' ? value.toFixed(3) : value}
+                    </div>
+                    {target && <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", marginTop: 2 }}>target: {target}</div>}
+                </div>
+            );
+        }
+
+        function MessageBubble({ msg }) {
+            const isUser = msg.from === "user";
+            const time = new Date(msg.timestamp || msg.ts).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+
+            return (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: isUser ? "flex-end" : "flex-start", marginBottom: 10 }}>
+                    {!isUser && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            <div style={{
+                                width: 6, height: 6, borderRadius: "50%",
+                                background: "#FFD93D", boxShadow: "0 0 8px #FFD93D",
+                                animation: "pulse 2s infinite"
+                            }} />
+                            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace" }}>SYNAPSE</span>
+                        </div>
+                    )}
+                    <div style={{
+                        maxWidth: "85%", padding: "10px 14px",
+                        borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                        background: isUser ? "linear-gradient(135deg, #1565C0, #0D47A1)" : "rgba(255,255,255,0.06)",
+                        border: isUser ? "none" : "1px solid rgba(255,255,255,0.08)",
+                        color: "rgba(255,255,255,0.88)", fontSize: 13, lineHeight: 1.6,
+                    }}>{msg.text}</div>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginTop: 3, fontFamily: "'DM Mono', monospace" }}>{time}</span>
+                </div>
+            );
+        }
+
+        function ControlButton({ onClick, disabled, variant, children }) {
+            const variants = {
+                primary: { bg: "#4ECDC4", color: "#000" },
+                success: { bg: "#A8E6CF", color: "#000" },
+                warning: { bg: "#FFD93D", color: "#000" },
+                danger: { bg: "#FF6B9D", color: "#000" },
+                secondary: { bg: "#2a3444", color: "#fff" },
+            };
+            const v = variants[variant] || variants.secondary;
+
+            return (
+                <button
+                    onClick={onClick}
+                    disabled={disabled}
+                    style={{
+                        padding: "8px 16px", border: "none", borderRadius: 8,
+                        fontSize: 11, fontWeight: 500, cursor: disabled ? "not-allowed" : "pointer",
+                        background: v.bg, color: v.color,
+                        opacity: disabled ? 0.5 : 1,
+                        transition: "all 0.2s",
+                        fontFamily: "'DM Mono', monospace",
+                    }}
+                >
+                    {children}
+                </button>
+            );
+        }
+
+        // ── Main App ──────────────────────────────────────────────────────────────
         function App() {
-            // State
-            const [status, setStatus] = useState({ state: "idle", step: 0, elapsed_human: "0s", total_neurons: 0 });
-            const [metrics, setMetrics] = useState({ phi: 0, mean_agency: 0, integration_score: 0, meta_confidence: 0 });
-            const [neuro, setNeuro] = useState({ dopamine: 0.5, serotonin: 0.5, oxytocin: 0.5, cortisol: 0.3, norepinephrine: 0.4 });
+            // State from API
+            const [status, setStatus] = useState({ state: "idle", step: 0, total_samples: 0, elapsed_seconds: 0 });
+            const [metrics, setMetrics] = useState({ phi: 0.4, agency: 0, integration_score: 0, meta_confidence: 0 });
+            const [neurochemistry, setNeurochemistry] = useState({ dopamine: 0.5, serotonin: 0.5, oxytocin: 0.4, cortisol: 0.3, norepinephrine: 0.4 });
             const [checkpoints, setCheckpoints] = useState([]);
             const [messages, setMessages] = useState([]);
             const [chatInput, setChatInput] = useState("");
             const [connected, setConnected] = useState(false);
 
-            // Stop conditions
-            const [maxSteps, setMaxSteps] = useState("");
-            const [maxHours, setMaxHours] = useState("");
-            const [targetPhi, setTargetPhi] = useState("");
-            const [targetAgency, setTargetAgency] = useState("");
-
-            // Neurogenesis
-            const [neuroEnabled, setNeuroEnabled] = useState(true);
-            const [maxNeurons, setMaxNeurons] = useState("100000");
-            const [growthThreshold, setGrowthThreshold] = useState("0.85");
+            // Simulated state for visuals
+            const [tick, setTick] = useState(0);
+            const [popActivity, setPopActivity] = useState(() =>
+                Object.fromEntries(POPULATIONS.map(p => [p.id, Math.random() * 0.4 + 0.1]))
+            );
+            const [spikes, setSpikes] = useState([]);
+            const [neuroHistory, setNeuroHistory] = useState(() =>
+                Array.from({length: 60}, (_, i) => ({ t: i, ...Object.fromEntries(NEURO.map(n => [n.id, 0.5])) }))
+            );
 
             const wsRef = useRef();
             const chatRef = useRef();
@@ -222,7 +272,8 @@
                     ws.onmessage = (e) => {
                         const data = JSON.parse(e.data);
                         if (data.state) setStatus(prev => ({ ...prev, ...data }));
-                        if (data.metrics) setMetrics(data.metrics);
+                        if (data.phi !== undefined) setMetrics(prev => ({ ...prev, phi: data.phi, agency: data.agency, integration_score: data.integration_score }));
+                        if (data.neurochemistry) setNeurochemistry(data.neurochemistry);
                     };
                     ws.onclose = () => {
                         setConnected(false);
@@ -234,11 +285,53 @@
                 return () => ws?.close();
             }, []);
 
+            // Simulation loop for visuals
+            useEffect(() => {
+                const id = setInterval(() => {
+                    setTick(t => t + 1);
+
+                    // Update population activity
+                    setPopActivity(prev => {
+                        const next = { ...prev };
+                        POPULATIONS.forEach(p => {
+                            let v = prev[p.id];
+                            v += (Math.random() - 0.49) * 0.08;
+                            v = clamp(v, 0.02, 0.95);
+                            next[p.id] = v;
+                        });
+                        return next;
+                    });
+
+                    // Generate spikes
+                    setSpikes(Array.from({length: Math.floor(Math.random() * 18 + 4)}, () => ({
+                        x: Math.random(), y: Math.random(),
+                        pop: POPULATIONS[Math.floor(Math.random() * POPULATIONS.length)],
+                        size: Math.random() * 3 + 1,
+                        id: Math.random(),
+                    })));
+
+                    // Update neuro history
+                    setNeuroHistory(h => {
+                        const row = { t: h[h.length - 1].t + 1 };
+                        NEURO.forEach(n => { row[n.id] = neurochemistry[n.id] || 0.5; });
+                        return [...h.slice(-80), row];
+                    });
+
+                }, 300);
+                return () => clearInterval(id);
+            }, [neurochemistry]);
+
             // Load initial data
             useEffect(() => {
                 const load = async () => {
                     const s = await api("/api/status");
                     if (s) setStatus(prev => ({ ...prev, ...s }));
+
+                    const m = await api("/api/metrics");
+                    if (m) setMetrics(prev => ({ ...prev, ...m }));
+
+                    const n = await api("/api/neurochemistry");
+                    if (n) setNeurochemistry(n);
 
                     const c = await api("/api/checkpoints");
                     if (c) setCheckpoints(c);
@@ -247,7 +340,7 @@
                     if (h) setMessages(h);
                 };
                 load();
-                const iv = setInterval(load, 10000);
+                const iv = setInterval(load, 5000);
                 return () => clearInterval(iv);
             }, []);
 
@@ -266,35 +359,15 @@
                 }
             };
 
-            const setStopCond = async () => {
-                const body = {};
-                if (maxSteps) body.max_steps = parseInt(maxSteps);
-                if (maxHours) body.max_hours = parseFloat(maxHours);
-                if (targetPhi) body.target_phi = parseFloat(targetPhi);
-                if (targetAgency) body.target_agency = parseFloat(targetAgency);
-                await api("/api/training/stop-conditions", "POST", body);
-                alert("Stop conditions applied!");
-            };
-
-            const setNeuroCfg = async () => {
-                await api("/api/neurogenesis/config", "POST", {
-                    enabled: neuroEnabled,
-                    max_neurons: parseInt(maxNeurons),
-                    activation_threshold: parseFloat(growthThreshold)
-                });
-                alert("Neurogenesis config updated!");
-            };
-
             const saveCkpt = async () => {
                 const res = await api("/api/checkpoint/save", "POST");
                 if (res) alert("Saved: " + res.path);
-                // Reload list
                 const c = await api("/api/checkpoints");
                 if (c) setCheckpoints(c);
             };
 
             const loadCkpt = async (path) => {
-                if (confirm("Load checkpoint? Current progress will be lost.")) {
+                if (confirm("Load checkpoint?")) {
                     await api("/api/checkpoint/load?path=" + encodeURIComponent(path), "POST");
                     alert("Loaded!");
                 }
@@ -318,257 +391,315 @@
                 }
             };
 
-            // Render
+            // Derived state
             const isRunning = status.state === "running";
             const isPaused = status.state === "paused";
             const isIdle = status.state === "idle";
+            const gwWinner = POPULATIONS.reduce((a, b) => popActivity[a.id] > popActivity[b.id] ? a : b, POPULATIONS[0]);
+
+            // Format time
+            const formatTime = (secs) => {
+                if (!secs) return "0s";
+                const h = Math.floor(secs / 3600);
+                const m = Math.floor((secs % 3600) / 60);
+                const s = Math.floor(secs % 60);
+                if (h > 0) return `${h}h ${m}m ${s}s`;
+                if (m > 0) return `${m}m ${s}s`;
+                return `${s}s`;
+            };
+
+            // Life stage
+            const days = Math.floor((status.elapsed_seconds || 0) / 86400);
+            const lifeStage = days < 1 ? "Новорождённый" : days < 7 ? "Младенец" : days < 30 ? "Ребёнок" : "Взрослый";
+            const lifeColor = days < 1 ? "#FF6B9D" : days < 7 ? "#FFEAA7" : days < 30 ? "#4ECDC4" : "#A8E6CF";
 
             return (
-                <div>
-                    {/* Header */}
-                    <div className="header">
-                        <div className="logo">
-                            <div className="logo-dot" style={{ background: connected ? "#4ecdc4" : "#ff6b9d" }}></div>
-                            <span className="logo-text">SYNAPSE</span>
-                            <span className={"status-badge status-" + status.state}>{status.state}</span>
+                <div style={{ minHeight: "100vh" }}>
+                    {/* ── Top bar ── */}
+                    <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 20px", borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        backdropFilter: "blur(10px)", background: "rgba(6,10,18,0.8)",
+                        position: "sticky", top: 0, zIndex: 100
+                    }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                                <div style={{
+                                    width: 8, height: 8, borderRadius: "50%",
+                                    background: connected ? "#4ECDC4" : "#FF6B9D",
+                                    boxShadow: `0 0 10px ${connected ? "#4ECDC4" : "#FF6B9D"}`,
+                                    animation: "pulse 1.5s infinite"
+                                }} />
+                                <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: "0.08em", color: "white" }}>SYNAPSE</span>
+                            </div>
+                            <div style={{ width: 1, height: 20, background: "rgba(255,255,255,0.1)" }} />
+                            <span style={{ fontSize: 11, fontFamily: "'DM Mono', monospace", color: "rgba(255,255,255,0.3)" }}>Neural Monitor v3.0</span>
                         </div>
-                        <div className="info-bar">
-                            <span>Step: {status.step?.toLocaleString()}</span>
-                            <span>Time: {status.elapsed_human}</span>
-                            <span>Neurons: {status.total_neurons?.toLocaleString()}</span>
+
+                        <div style={{ display: "flex", gap: 20, alignItems: "center" }}>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace" }}>STEPS</span>
+                                <span style={{ fontSize: 11, color: "#4ECDC4", fontFamily: "'DM Mono', monospace", fontWeight: 500 }}>
+                                    {(status.step || 0).toLocaleString()}
+                                </span>
+                            </div>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace" }}>TIME</span>
+                                <span style={{ fontSize: 11, color: lifeColor, fontFamily: "'DM Mono', monospace", fontWeight: 500 }}>
+                                    {formatTime(status.elapsed_seconds)}
+                                </span>
+                            </div>
+                            <div style={{
+                                padding: "3px 10px", borderRadius: 20,
+                                background: `rgba(${hexToRgb(lifeColor)},0.12)`,
+                                border: `1px solid rgba(${hexToRgb(lifeColor)},0.3)`,
+                                fontSize: 10, color: lifeColor, fontFamily: "'DM Mono', monospace"
+                            }}>
+                                {lifeStage}
+                            </div>
+                            <div style={{
+                                padding: "3px 10px", borderRadius: 20,
+                                background: isRunning ? "rgba(78,205,196,0.12)" : isPaused ? "rgba(255,217,61,0.12)" : "rgba(255,255,255,0.05)",
+                                border: `1px solid ${isRunning ? "rgba(78,205,196,0.3)" : isPaused ? "rgba(255,217,61,0.3)" : "rgba(255,255,255,0.1)"}`,
+                                fontSize: 10, color: isRunning ? "#4ECDC4" : isPaused ? "#FFD93D" : "rgba(255,255,255,0.5)",
+                                fontFamily: "'DM Mono', monospace", textTransform: "uppercase"
+                            }}>
+                                {status.state}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="container">
-                        <div className="main-grid">
+                    {/* ── Main grid ── */}
+                    <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "260px 1fr 300px",
+                        gridTemplateRows: "auto 1fr",
+                        gap: 1,
+                        height: "calc(100vh - 49px)"
+                    }}>
 
-                            {/* Left: Controls */}
+                        {/* ── LEFT: Populations + Metrics ── */}
+                        <div style={{
+                            borderRight: "1px solid rgba(255,255,255,0.05)",
+                            overflowY: "auto", padding: "16px 14px",
+                            display: "flex", flexDirection: "column", gap: 14
+                        }}>
+                            {/* Population Activity */}
                             <div>
-                                {/* Training Control */}
-                                <div className="card" style={{ marginBottom: 15 }}>
-                                    <div className="card-header">▶ Training Control</div>
-                                    <div className="card-body">
-                                        <div className="btn-group">
-                                            {isIdle || isPaused ? (
-                                                <button className="btn btn-success btn-block" onClick={isPaused ? resume : start}>
-                                                    ▶ {isPaused ? "RESUME" : "START"}
-                                                </button>
-                                            ) : null}
-                                            {isRunning && (
-                                                <button className="btn btn-warning btn-block" onClick={pause}>
-                                                    ⏸ PAUSE
-                                                </button>
-                                            )}
-                                        </div>
-                                        {!isIdle && (
-                                            <button className="btn btn-danger btn-block" onClick={stop}>
-                                                ⏹ STOP & SAVE
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
+                                <div style={{
+                                    fontSize: 10, color: "rgba(255,255,255,0.3)",
+                                    fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", marginBottom: 10
+                                }}>ПОПУЛЯЦИИ · АКТИВНОСТЬ</div>
+                                {POPULATIONS.map(pop => (
+                                    <PopBar key={pop.id} pop={pop} value={popActivity[pop.id]} isWinner={gwWinner.id === pop.id} />
+                                ))}
+                            </div>
 
-                                {/* Stop Conditions */}
-                                <div className="card" style={{ marginBottom: 15 }}>
-                                    <div className="card-header">⏱ Stop Conditions</div>
-                                    <div className="card-body">
-                                        <div className="input-row">
-                                            <div className="input-group">
-                                                <label className="input-label">Max Steps</label>
-                                                <input className="input" type="number" placeholder="100000"
-                                                    value={maxSteps} onChange={e => setMaxSteps(e.target.value)} />
-                                            </div>
-                                            <div className="input-group">
-                                                <label className="input-label">Max Hours</label>
-                                                <input className="input" type="number" placeholder="8" step="0.5"
-                                                    value={maxHours} onChange={e => setMaxHours(e.target.value)} />
-                                            </div>
-                                        </div>
-                                        <div className="input-row">
-                                            <div className="input-group">
-                                                <label className="input-label">Target Φ</label>
-                                                <input className="input" type="number" placeholder="0.7" step="0.1"
-                                                    value={targetPhi} onChange={e => setTargetPhi(e.target.value)} />
-                                            </div>
-                                            <div className="input-group">
-                                                <label className="input-label">Target Agency</label>
-                                                <input className="input" type="number" placeholder="0.7" step="0.1"
-                                                    value={targetAgency} onChange={e => setTargetAgency(e.target.value)} />
-                                            </div>
-                                        </div>
-                                        <button className="btn btn-primary btn-block" onClick={setStopCond}>
-                                            Apply Conditions
-                                        </button>
+                            {/* Phi + Agency */}
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                <div style={{
+                                    padding: "10px 12px", background: "rgba(255,255,255,0.03)",
+                                    borderRadius: 8, border: "1px solid rgba(255,217,61,0.2)"
+                                }}>
+                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace", marginBottom: 6 }}>IIT  Φ</div>
+                                    <div style={{ fontSize: 22, fontWeight: 600, color: "#FFD93D", fontFamily: "'DM Mono', monospace" }}>
+                                        {(metrics.phi || 0).toFixed(2)}
                                     </div>
+                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", marginTop: 2 }}>target: 0.4</div>
                                 </div>
-
-                                {/* Neurogenesis */}
-                                <div className="card" style={{ marginBottom: 15 }}>
-                                    <div className="card-header">🧬 Neurogenesis</div>
-                                    <div className="card-body">
-                                        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
-                                            <input type="checkbox" checked={neuroEnabled}
-                                                onChange={e => setNeuroEnabled(e.target.checked)} />
-                                            <span style={{ fontSize: 13 }}>Enable Neurogenesis</span>
-                                        </label>
-                                        <div className="input-row">
-                                            <div className="input-group">
-                                                <label className="input-label">Max Neurons</label>
-                                                <input className="input" type="number" value={maxNeurons}
-                                                    onChange={e => setMaxNeurons(e.target.value)} />
-                                            </div>
-                                            <div className="input-group">
-                                                <label className="input-label">Threshold</label>
-                                                <input className="input" type="number" step="0.05" value={growthThreshold}
-                                                    onChange={e => setGrowthThreshold(e.target.value)} />
-                                            </div>
-                                        </div>
-                                        <button className="btn btn-secondary btn-block" onClick={setNeuroCfg}>
-                                            Update Config
-                                        </button>
-                                        <div style={{ marginTop: 10, fontSize: 11, color: "#4a5568" }}>
-                                            Growth events: {status.growth_events || 0}
-                                        </div>
+                                <div style={{
+                                    padding: "10px 12px", background: "rgba(255,255,255,0.03)",
+                                    borderRadius: 8, border: "1px solid rgba(168,230,207,0.2)"
+                                }}>
+                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.35)", fontFamily: "'DM Mono', monospace", marginBottom: 6 }}>Agency</div>
+                                    <div style={{ fontSize: 22, fontWeight: 600, color: "#A8E6CF", fontFamily: "'DM Mono', monospace" }}>
+                                        {(metrics.agency || 0).toFixed(2)}
                                     </div>
-                                </div>
-
-                                {/* Checkpoints */}
-                                <div className="card">
-                                    <div className="card-header">💾 Checkpoints</div>
-                                    <div className="card-body">
-                                        <div className="btn-group">
-                                            <button className="btn btn-primary btn-block" onClick={saveCkpt}>
-                                                💾 Save
-                                            </button>
-                                            <button className="btn btn-danger btn-block" onClick={resetModel}>
-                                                🔄 Reset
-                                            </button>
-                                        </div>
-                                        <div className="checkpoint-list">
-                                            {checkpoints.length === 0 ? (
-                                                <div style={{ textAlign: "center", padding: 15, color: "#4a5568", fontSize: 12 }}>
-                                                    No checkpoints yet
-                                                </div>
-                                            ) : (
-                                                checkpoints.map((c, i) => (
-                                                    <div key={i} className="checkpoint-item">
-                                                        <div className="checkpoint-info">
-                                                            <div className="checkpoint-name">{c.name}</div>
-                                                            <div className="checkpoint-size">{c.size_mb?.toFixed(1)} MB</div>
-                                                        </div>
-                                                        <button className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: 11 }}
-                                                            onClick={() => loadCkpt(c.path)}>
-                                                            Load
-                                                        </button>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
+                                    <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", marginTop: 2 }}>target: 0.7</div>
                                 </div>
                             </div>
 
-                            {/* Center: Metrics */}
-                            <div>
-                                <div className="metrics-grid">
-                                    <div className="metric-card">
-                                        <div className="metric-label">IIT Φ (Phi)</div>
-                                        <div className="metric-value metric-phi">{(metrics.phi || 0).toFixed(3)}</div>
-                                    </div>
-                                    <div className="metric-card">
-                                        <div className="metric-label">Agency</div>
-                                        <div className="metric-value metric-agency">{(metrics.mean_agency || 0).toFixed(3)}</div>
-                                    </div>
-                                    <div className="metric-card">
-                                        <div className="metric-label">Integration</div>
-                                        <div className="metric-value metric-integration">{(metrics.integration_score || 0).toFixed(3)}</div>
-                                    </div>
-                                    <div className="metric-card">
-                                        <div className="metric-label">Confidence</div>
-                                        <div className="metric-value metric-confidence">{(metrics.meta_confidence || 0).toFixed(3)}</div>
-                                    </div>
+                            {/* GW Winner */}
+                            <div style={{
+                                padding: "10px 12px", background: "rgba(255,255,255,0.03)",
+                                borderRadius: 8, border: "1px solid rgba(255,217,61,0.15)"
+                            }}>
+                                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", marginBottom: 6 }}>GLOBAL WORKSPACE</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <div style={{
+                                        width: 8, height: 8, borderRadius: "50%",
+                                        background: gwWinner.color, boxShadow: `0 0 10px ${gwWinner.color}`,
+                                        animation: "pulse 0.8s infinite"
+                                    }} />
+                                    <span style={{ fontSize: 12, color: gwWinner.color, fontWeight: 500 }}>{gwWinner.label}</span>
                                 </div>
+                                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", marginTop: 4 }}>Broadcast активен</div>
+                            </div>
 
-                                <div className="card">
-                                    <div className="card-header">📊 Status</div>
-                                    <div className="card-body">
-                                        <pre style={{ fontSize: 11, color: "#6b7280", whiteSpace: "pre-wrap" }}>
-{`Training Status: ${status.state}
-Steps: ${status.step?.toLocaleString() || 0}
-Time: ${status.elapsed_human || "0s"}
-Samples: ${status.total_samples?.toLocaleString() || 0}
-Neurons: ${status.total_neurons?.toLocaleString() || 0}
-
-Metrics:
-  Φ (Phi):      ${(metrics.phi || 0).toFixed(4)} (target: >0.4)
-  Agency:      ${(metrics.mean_agency || 0).toFixed(4)} (target: >0.7)
-  Integration: ${(metrics.integration_score || 0).toFixed(4)} (target: >0.6)
-  Confidence:  ${(metrics.meta_confidence || 0).toFixed(4)} (target: >0.6)`}
-                                        </pre>
-                                    </div>
+                            {/* Controls */}
+                            <div style={{
+                                padding: "12px", background: "rgba(255,255,255,0.02)",
+                                borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)"
+                            }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", marginBottom: 10 }}>КОНТРОЛИ</div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                    {isIdle || isPaused ? (
+                                        <ControlButton variant="success" onClick={isPaused ? resume : start}>
+                                            ▶ {isPaused ? "RESUME" : "START"}
+                                        </ControlButton>
+                                    ) : null}
+                                    {isRunning && (
+                                        <ControlButton variant="warning" onClick={pause}>⏸ PAUSE</ControlButton>
+                                    )}
+                                    {!isIdle && (
+                                        <ControlButton variant="danger" onClick={stop}>⏹ STOP</ControlButton>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Right: Neuro & Chat */}
-                            <div>
-                                {/* Neurochemistry */}
-                                <div className="card" style={{ marginBottom: 15 }}>
-                                    <div className="card-header">🧪 Neurochemistry</div>
-                                    <div className="card-body">
-                                        <Gauge label="Dopamine" value={neuro.dopamine} color="#ffd93d" />
-                                        <Gauge label="Serotonin" value={neuro.serotonin} color="#4ecdc4" />
-                                        <Gauge label="Oxytocin" value={neuro.oxytocin} color="#a8e6cf" />
-                                        <Gauge label="Cortisol" value={neuro.cortisol} color="#ff8c42" />
-                                        <Gauge label="Norepinephrine" value={neuro.norepinephrine} color="#ff6b9d" />
-                                    </div>
+                            {/* Checkpoints */}
+                            <div style={{
+                                padding: "12px", background: "rgba(255,255,255,0.02)",
+                                borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)"
+                            }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", marginBottom: 10 }}>ЧЕКПОИНТЫ</div>
+                                <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                                    <ControlButton variant="primary" onClick={saveCkpt}>💾 Save</ControlButton>
+                                    <ControlButton variant="secondary" onClick={resetModel}>🔄 Reset</ControlButton>
                                 </div>
-
-                                {/* Chat */}
-                                <div className="card" style={{ height: 350 }}>
-                                    <div className="card-header">💬 Chat</div>
-                                    <div className="chat-container">
-                                        <div className="chat-messages" ref={chatRef}>
-                                            {messages.length === 0 ? (
-                                                <div style={{ textAlign: "center", padding: 30, color: "#4a5568", fontSize: 12 }}>
-                                                    Start conversation...
-                                                </div>
-                                            ) : (
-                                                messages.map((m, i) => (
-                                                    <div key={i} className="chat-message" style={{ textAlign: m.from === "user" ? "right" : "left" }}>
-                                                        <div className={"chat-bubble chat-bubble-" + m.from}>
-                                                            {m.text}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                        <div className="chat-input-container">
-                                            <input className="chat-input"
-                                                value={chatInput}
-                                                onChange={e => setChatInput(e.target.value)}
-                                                onKeyDown={e => e.key === "Enter" && sendChat()}
-                                                placeholder="Message..." />
-                                            <button className="btn btn-primary" onClick={sendChat}>→</button>
-                                        </div>
-                                    </div>
+                                <div style={{ maxHeight: 120, overflowY: "auto" }}>
+                                    {checkpoints.length === 0 ? (
+                                        <div style={{ textAlign: "center", padding: 10, color: "rgba(255,255,255,0.2)", fontSize: 10 }}>No checkpoints</div>
+                                    ) : (
+                                        checkpoints.slice(0, 5).map((c, i) => (
+                                            <div key={i} style={{
+                                                display: "flex", justifyContent: "space-between", alignItems: "center",
+                                                padding: "6px 8px", marginBottom: 4, background: "rgba(255,255,255,0.02)", borderRadius: 6
+                                            }}>
+                                                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.4)", fontFamily: "'DM Mono', monospace" }}>
+                                                    {c.name?.slice(0, 20)}...
+                                                </span>
+                                                <ControlButton variant="secondary" onClick={() => loadCkpt(c.path)}>Load</ControlButton>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
-
                         </div>
-                    </div>
-                </div>
-            );
-        }
 
-        function Gauge({ label, value, color }) {
-            return (
-                <div className="gauge">
-                    <div className="gauge-header">
-                        <span className="gauge-label">{label}</span>
-                        <span className="gauge-value" style={{ color }}>{Math.round(value * 100)}%</span>
-                    </div>
-                    <div className="gauge-bar">
-                        <div className="gauge-fill" style={{ width: `${value * 100}%`, background: color }}></div>
+                        {/* ── CENTER: Spike raster + Info ── */}
+                        <div style={{ display: "flex", flexDirection: "column", borderRight: "1px solid rgba(255,255,255,0.05)", overflow: "hidden" }}>
+                            {/* Spike raster */}
+                            <div style={{ flex: "0 0 200px", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "10px 14px 6px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em" }}>SPIKE RASTER · РЕАЛЬНОЕ ВРЕМЯ</span>
+                                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.2)", fontFamily: "'DM Mono', monospace" }}>
+                                        {spikes.length} спайков/тик
+                                    </span>
+                                </div>
+                                <div style={{ height: 155 }}><SpikeCanvas spikes={spikes} /></div>
+                            </div>
+
+                            {/* Metrics grid */}
+                            <div style={{ padding: "14px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", marginBottom: 10 }}>МЕТРИКИ · ОСНОВНЫЕ</div>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+                                    <MetricCard label="IIT Φ (Phi)" value={metrics.phi} color="#FFD93D" target="0.4" />
+                                    <MetricCard label="Agency" value={metrics.agency} color="#A8E6CF" target="0.7" />
+                                    <MetricCard label="Integration" value={metrics.integration_score} color="#4ECDC4" target="0.6" />
+                                    <MetricCard label="Confidence" value={metrics.meta_confidence} color="#96CEB4" target="0.6" />
+                                </div>
+                            </div>
+
+                            {/* Status info */}
+                            <div style={{ flex: 1, padding: "14px", overflow: "auto" }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", marginBottom: 10 }}>СТАТУС · СИСТЕМА</div>
+                                <div style={{
+                                    padding: "14px", background: "rgba(255,255,255,0.02)",
+                                    borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)",
+                                    fontFamily: "'DM Mono', monospace", fontSize: 11, color: "rgba(255,255,255,0.6)",
+                                    whiteSpace: "pre-wrap", lineHeight: 1.8
+                                }}>
+{`State:           ${status.state?.toUpperCase() || 'IDLE'}
+Steps:           ${(status.step || 0).toLocaleString()}
+Samples:         ${(status.total_samples || 0).toLocaleString()}
+Neurons:         ${(status.neurons || status.total_neurons || 0).toLocaleString()}
+Samples/sec:     ${(status.samples_per_second || 0).toFixed(1)}
+
+Φ (Phi):         ${(metrics.phi || 0).toFixed(4)}
+Agency:          ${(metrics.agency || 0).toFixed(4)}
+Integration:     ${(metrics.integration_score || 0).toFixed(4)}
+Meta-confidence: ${(metrics.meta_confidence || 0).toFixed(4)}`}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* ── RIGHT: Neuro + Chat ── */}
+                        <div style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+                            {/* Neurochemistry */}
+                            <div style={{ padding: "14px 14px 10px", borderBottom: "1px solid rgba(255,255,255,0.05)", flex: "0 0 auto" }}>
+                                <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em", marginBottom: 10 }}>НЕЙРОХИМИЯ · УРОВНИ</div>
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    {NEURO.map(n => (
+                                        <NeuroGauge key={n.id} label={n.label} color={n.color} value={neurochemistry[n.id] || 0.5} />
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Chat */}
+                            <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
+                                <div style={{ padding: "10px 14px 6px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                                    <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontFamily: "'DM Mono', monospace", letterSpacing: "0.1em" }}>КОММУНИКАЦИЯ</span>
+                                </div>
+
+                                <div ref={chatRef} style={{ flex: 1, overflowY: "auto", padding: "12px 14px", display: "flex", flexDirection: "column", gap: 2 }}>
+                                    {messages.length === 0 ? (
+                                        <div style={{ textAlign: "center", padding: 30, color: "rgba(255,255,255,0.2)", fontSize: 11 }}>
+                                            Начни разговор...
+                                        </div>
+                                    ) : (
+                                        messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)
+                                    )}
+                                </div>
+
+                                <div style={{ padding: "10px 14px 14px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                                        <input
+                                            value={chatInput}
+                                            onChange={e => setChatInput(e.target.value)}
+                                            onKeyDown={e => { if (e.key === "Enter" && chatInput.trim()) { sendChat(); } }}
+                                            placeholder="Написать мозгу..."
+                                            style={{
+                                                flex: 1, background: "rgba(255,255,255,0.05)",
+                                                border: "1px solid rgba(255,255,255,0.1)",
+                                                borderRadius: 10, padding: "9px 14px", color: "white", fontSize: 13,
+                                                outline: "none", fontFamily: "'DM Sans', sans-serif",
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => { if (chatInput.trim()) { sendChat(); } }}
+                                            style={{
+                                                width: 36, height: 36, borderRadius: 10, border: "none", cursor: "pointer",
+                                                background: "linear-gradient(135deg, #1565C0, #0D47A1)",
+                                                color: "white", fontSize: 16, flexShrink: 0,
+                                                display: "flex", alignItems: "center", justifyContent: "center",
+                                            }}>→</button>
+                                    </div>
+                                    <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                        {["Как ты?", "Что чувствуешь?", "Что помнишь?"].map(q => (
+                                            <button key={q} onClick={() => { setChatInput(q); }}
+                                                style={{
+                                                    padding: "3px 10px", borderRadius: 20,
+                                                    border: "1px solid rgba(255,255,255,0.1)",
+                                                    background: "rgba(255,255,255,0.04)",
+                                                    color: "rgba(255,255,255,0.5)", fontSize: 10,
+                                                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif"
+                                                }}>{q}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             );
