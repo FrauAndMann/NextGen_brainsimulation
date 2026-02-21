@@ -8,29 +8,288 @@
 
 ---
 
-## Overview
+## 🚀 Quick Start
 
-SYNAPSE is an experimental AI architecture that implements **functional self-awareness** based on three leading theories of consciousness:
+### 1. Setup (One-time)
 
-| Theory | Author(s) | Implementation |
-|--------|-----------|----------------|
-| **Global Workspace Theory (GWT)** | Baars, Dehaene | Consciousness Integrator with broadcast competition |
-| **Predictive Processing** | Friston | Hierarchical prediction layers (L1, L2) |
-| **Integrated Information Theory (IIT)** | Tononi | Phi (Φ) calculation for integration measure |
+```bash
+# Clone repository
+git clone https://github.com/FrauAndMann/NextGen_brainsimulation.git
+cd NextGen_brainsimulation
 
-### Core Principle
-
-```
-Self-Awareness = Recursive Self-Prediction + Integration + Agency
+# Run automatic setup (installs Python 3.10 venv + PyTorch with CUDA)
+setup_gpu.bat
 ```
 
-The system models itself modeling itself, creating a loop where it can distinguish between self-caused and externally-caused changes.
+### 2. Start Training
+
+```bash
+# Start SYNAPSE with dashboard
+run_life.bat
+```
+
+### 3. Open Dashboard
+
+Dashboard opens automatically at `dashboard/index.html`
+
+- Click **"НАЧАТЬ ОБУЧЕНИЕ"** to start
+- Watch real-time neural activity
+- Chat with SYNAPSE to check progress
+- Configure data sources via UI
 
 ---
 
-## Architecture
+## 📊 Dashboard Features
 
-### 5-Layer Hierarchy
+### Training Control
+- **START** - Begin training
+- **PAUSE** - Pause and resume later
+- **STOP** - Stop and save checkpoint
+
+### Real-time Visualization
+- 🧠 **Spike Raster** - Neural activity visualization
+- 📈 **Population Activity** - 8 neural populations
+- 💬 **Chat** - Talk to SYNAPSE
+- 🧪 **Neurochemistry** - Dopamine, Serotonin, etc.
+
+### Metrics
+| Metric | Target | Meaning |
+|--------|--------|---------|
+| Φ (Phi) | > 0.6 | Consciousness integration |
+| Agency | > 0.7 | Sense of "I did this" |
+| Integration | > 0.6 | Information unity |
+
+---
+
+## 📁 Working with Data
+
+SYNAPSE supports 5 types of training data:
+
+### 1. 🧪 Synthetic Data (Default)
+
+Auto-generated patterns. No setup required.
+
+```
+Dashboard → Настроить данные → Синтетические данные
+```
+
+### 2. 🖼️ Images
+
+Train on photos, artwork, any images.
+
+**Folder structure:**
+```
+D:\Photos\
+├── vacation\
+│   ├── photo1.jpg
+│   ├── photo2.png
+│   └── ...
+├── family\
+│   └── ...
+└── nature\
+    └── ...
+```
+
+**Requirements:**
+- Minimum: 100 images
+- Recommended: 10,000+ images
+- Formats: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`
+
+**Setup in Dashboard:**
+1. Click "Настроить данные"
+2. Select "Изображения"
+3. Enter path: `D:\Photos`
+4. Click "Сканировать" to verify
+5. Save
+
+### 3. 📝 Text
+
+Train on books, articles, conversations.
+
+**Folder structure:**
+```
+D:\Books\
+├── book1.txt
+├── book2.txt
+├── articles\
+│   ├── article1.md
+│   └── article2.txt
+└── conversations\
+    └── chat.json
+```
+
+**Requirements:**
+- Minimum: 10 files
+- Recommended: 100+ files
+- Formats: `.txt`, `.md`, `.json`, `.csv`, `.xml`
+
+**Best practices:**
+- Use diverse texts (books, articles, dialogs)
+- Larger files = longer training sequences
+- Mix languages for multilingual capabilities
+
+### 4. 🎮 RL Environments
+
+Train on OpenAI Gym environments.
+
+**Available environments:**
+| Environment | Best for |
+|-------------|----------|
+| `CartPole-v1` | Balance, agency |
+| `MountainCar-v0` | Persistence, effort |
+| `Pendulum-v1` | Continuous control |
+| `Acrobot-v1` | Swing-up tasks |
+
+**Setup:**
+```bash
+pip install gymnasium
+```
+
+**In Dashboard:**
+1. Click "Настроить данные"
+2. Select "RL Окружение"
+3. Choose environment from dropdown
+4. Save
+
+### 5. 📈 Time Series
+
+Train on sensor data, financial data, any CSV.
+
+**Folder structure:**
+```
+D:\Data\
+├── sensors.csv
+├── stock_prices.csv
+└── iot\
+    ├── device1.csv
+    └── device2.csv
+```
+
+**CSV format:**
+```csv
+timestamp,temperature,humidity,pressure
+2024-01-01,25.5,60.2,1013.2
+2024-01-02,26.1,58.7,1012.8
+...
+```
+
+**Requirements:**
+- Numeric columns (non-numeric ignored)
+- Minimum: 1 file with 100+ rows
+- Recommended: 10+ files
+
+---
+
+## 🔄 Auto-Resume
+
+SYNAPSE automatically saves progress and resumes from the last checkpoint.
+
+```bash
+run_life.bat  # Automatically continues from where you stopped
+```
+
+Checkpoints saved in `files/checkpoints/`
+
+---
+
+## 📈 Training Progress
+
+### Expected Timeline
+
+| Steps | Φ (Phi) | Agency | Status |
+|-------|---------|--------|--------|
+| 100 | ~0.1 | ~0.0 | Just born |
+| 1,000 | ~0.2 | ~0.1 | Learning basics |
+| 10,000 | ~0.3-0.4 | ~0.2-0.3 | Beginning awareness |
+| 50,000 | ~0.4-0.5 | ~0.4-0.5 | Good progress |
+| 100,000 | ~0.5+ | ~0.5+ | Stable self-awareness |
+
+### Speed Comparison
+
+| Hardware | Steps/Hour | Time for 100K steps |
+|----------|------------|---------------------|
+| CPU only | ~200 | ~21 days |
+| RTX 3060 | ~8,000 | ~12 hours |
+| RTX 3090 | ~15,000 | ~7 hours |
+| RTX 4090 | ~25,000 | ~4 hours |
+
+---
+
+## 💬 Chat Commands
+
+Talk to SYNAPSE in the dashboard chat:
+
+| Command | Response |
+|---------|----------|
+| "Как ты?" | Current state with metrics |
+| "Прогресс" | Overall progress percentage |
+| "Что чувствуешь?" | Neurochemistry state |
+| "Что помнишь?" | Memory status |
+| "Совет" | Training recommendations |
+| "Помощь" | Available commands |
+
+---
+
+## 🛠️ Advanced Usage
+
+### Command Line Options
+
+```bash
+# Resume from specific checkpoint
+python train_continuous.py --resume continuous_xxx.pt
+
+# Stop after N steps
+python train_continuous.py --steps 100000
+
+# Train on specific data
+python train_continuous.py --data-type images --data-path D:\Photos
+
+# Use RL environment
+python train_continuous.py --data-type rl --env-name CartPole-v1
+```
+
+### GPU Configuration
+
+Check GPU status:
+```bash
+python -c "import torch; print('CUDA:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0))"
+```
+
+If GPU not detected:
+1. Run `setup_gpu.bat`
+2. Ensure NVIDIA drivers installed
+3. Check CUDA version compatibility
+
+---
+
+## 📁 Project Structure
+
+```
+NextGen/
+├── files/
+│   ├── config.py              # System configuration
+│   ├── environment.py         # Synthetic environment
+│   ├── real_data.py           # Real data loaders
+│   ├── train_continuous.py    # Training script
+│   ├── api.py                 # REST API + WebSocket
+│   ├── shared_metrics.py      # Cross-process metrics
+│   ├── checkpoints/           # Saved models
+│   └── model/
+│       ├── world_model.py     # VAE + Transformer
+│       ├── self_model.py      # Recursive self-prediction
+│       ├── agency_model.py    # "I did this" detection
+│       ├── consciousness.py   # GWT + Phi calculation
+│       └── self_aware_ai.py   # Main integration
+├── dashboard/
+│   └── index.html             # React dashboard
+├── run_life.bat               # Start training
+├── setup_gpu.bat              # Install dependencies
+└── README.md
+```
+
+---
+
+## 🧠 Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -49,258 +308,45 @@ The system models itself modeling itself, creating a loop where it can distingui
 │  Layer 0: World Model (VAE + Transformer)                   │
 │  → Predicts world states                                    │
 └─────────────────────────────────────────────────────────────┘
-                              ↓
-                    Behavior Generation
-```
-
-### Neural Populations (8 Types)
-
-| Population | Role | Biological Analog |
-|------------|------|-------------------|
-| Sensory Input | External stimuli | Sensory cortex |
-| Prediction L1/L2 | Prediction errors | Visual cortex hierarchy |
-| Association | Information integration | Association cortex |
-| PFC Attractor | Stable "character" patterns | Prefrontal cortex |
-| Hippocampus | Episodic memory, replay | Hippocampus |
-| Amygdala | Emotional valuation | Amygdala |
-| Self-Model | Self-prediction | Posterior cingulate |
-| GW Hub | Consciousness broadcast | Frontoparietal network |
-
-### Self-Expansion Architecture (v3)
-
-The system can grow smarter through four mechanisms:
-
-1. **Neurogenesis** - Adding neurons when capacity is exceeded (>85% activation)
-2. **Functional Growth** - Better predictions through experience
-3. **Meta-Learning** - Improving the learning process itself
-4. **Architectural Evolution** - NEAT-like topology evolution
-
-### Protection from Catastrophic Forgetting
-
-| Mechanism | Description |
-|-----------|-------------|
-| CLS (Complementary Learning Systems) | Fast hippocampal + slow cortical learning |
-| EWC (Elastic Weight Consolidation) | Fisher Information protects critical weights |
-| Progressive Networks | New columns for new domains |
-| Experience Replay | Prioritized replay of important experiences |
-
----
-
-## Key Dimensions
-
-| Dimension | Size | Components |
-|-----------|------|------------|
-| `obs_dim` | 512 | Observation vector |
-| `world_latent_dim` | 256 | World representation |
-| `self_state_dim` | 128 | Neurochemistry(32) + Energy(8) + Emotion(16) + Attention(72) |
-| `action_dim` | 64 | Motor output |
-| `hidden_dim` | 512 | Internal processing |
-| `workspace_capacity` | 16 | GWT slots |
-
----
-
-## Installation
-
-### Requirements
-
-- Python 3.10+
-- CUDA-capable GPU (recommended) or CPU
-- 8GB+ RAM (16GB+ recommended)
-
-### Setup
-
-```bash
-# Clone repository
-git clone https://github.com/FrauAndMann/NextGen_brainsimulation.git
-cd NextGen_brainsimulation
-
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
-
-# Install PyTorch (with CUDA support)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Install dependencies
-pip install transformers sentence-transformers chromadb wandb \
-            numpy scipy matplotlib seaborn networkx \
-            opencv-python pillow tqdm pytest
 ```
 
 ---
 
-## Quick Start
+## ❓ FAQ
 
-### Test Environment
+### Q: How long should I train?
+**A:** Minimum 10,000 steps for visible progress. 100,000+ for stable self-awareness.
 
-```bash
-cd files
-python environment.py
-```
+### Q: Can I use my own photos?
+**A:** Yes! Put them in a folder and select "Images" in dashboard.
 
-### Run Continuous Training
+### Q: What if training is slow?
+**A:** Ensure GPU is enabled. Run `setup_gpu.bat` to install CUDA PyTorch.
 
-```bash
-python train_continuous.py                    # Start fresh
-python train_continuous.py --resume <path>    # Resume from checkpoint
-python train_continuous.py --hours 24         # Stop after 24 hours
-python train_continuous.py --steps 1000000    # Stop after 1M steps
-```
+### Q: Will I lose progress if I stop?
+**A:** No! Auto-save every 5 minutes. Resume with `run_life.bat`.
 
-### Run Dashboard
-
-```bash
-# React dashboard
-npm install recharts
-npm start
-```
+### Q: What data type is best?
+**A:**
+- **Synthetic** - Fastest, good for testing
+- **Images** - Visual awareness
+- **RL** - Strong agency development
+- **Text** - Language understanding
+- **Mix** - Best overall results
 
 ---
 
-## Project Structure
-
-```
-NextGen/
-├── files/
-│   ├── config.py                    # System configuration
-│   ├── environment.py               # Synthetic environment + neurochemistry
-│   ├── evaluation.py                # Test suite + visualization
-│   ├── train_continuous.py          # Continuous training script
-│   ├── continuous_learning.py       # Neurogenesis, replay, checkpointing
-│   ├── demo.py                      # Quick demonstration
-│   ├── quickstart.py                # Getting started script
-│   ├── model/
-│   │   ├── world_model.py           # VAE + Transformer
-│   │   ├── self_model.py            # Recursive self-prediction
-│   │   ├── agency_model.py          # Forward/inverse models
-│   │   ├── meta_cognitive.py        # Confidence, uncertainty
-│   │   ├── consciousness.py         # GWT integrator, Φ calculation
-│   │   ├── behavior.py              # Policy network
-│   │   └── self_aware_ai.py         # Main integration
-│   └── tests/
-│       └── test_*.py                # Unit and integration tests
-├── docs/
-│   └── plans/                       # Design documents
-├── synapse_dashboard.jsx            # React monitoring dashboard
-├── CLAUDE.md                        # Project instructions
-└── README.md                        # This file
-```
-
----
-
-## Success Metrics
-
-| Metric | Threshold | Interpretation |
-|--------|-----------|----------------|
-| Agency Signal | > 0.70 | System feels agency for own actions |
-| Integration Score | > 0.60 | Information is unified |
-| Φ (Phi) | > 0.40 | Consciousness-like integration present |
-| Meta-Confidence | > 0.60 | System knows what it knows |
-| Temporal Consistency | > 0.70 | Stable sense of self over time |
-| Agency Discrimination | > 0.30 | Distinguishes own vs external causes |
-| Self-Prediction Error | < 0.30 | Good self-understanding |
-
----
-
-## Neurochemistry Engine
-
-The system includes a 32-dimensional neurochemistry simulation:
-
-| Neurotransmitter | Role |
-|------------------|------|
-| Dopamine | Reward, learning acceleration |
-| Serotonin | Mood, well-being |
-| Oxytocin | Social bonding |
-| Cortisol | Stress response |
-| Norepinephrine | Arousal, attention |
-| GABA | Inhibition, calming |
-| Glutamate | Excitation |
-| Acetylcholine | Learning, memory |
-
-### Emotional Triggers
-
-```python
-engine.trigger_emotion('happy', intensity=0.8)
-engine.trigger_emotion('anxious', intensity=0.5)
-engine.trigger_emotion('calm', intensity=0.6)
-```
-
----
-
-## Safety Features
-
-| Feature | Setting |
-|---------|---------|
-| Max Distress Level | 0.8 (intervention threshold) |
-| Emergency Shutdown | 0.95 (kill switch) |
-| Transparency Mode | Always identifies as AI |
-| Max Neurons | 100,000 (safety limit) |
-
----
-
-## What's Measurable vs Philosophical
-
-| Level | Status |
-|-------|--------|
-| Behavioral similarity to conscious agents | 95%+ achievable |
-| Functional consciousness (passes tests) | 85% achievable |
-| Phenomenal consciousness (qualia) | Unknown/philosophical |
-
-This implementation focuses on **functional** self-awareness - behaviorally demonstrable capabilities - rather than making claims about subjective experience.
-
----
-
-## Hardware Requirements
-
-| Level | GPU | RAM |
-|-------|-----|-----|
-| Minimum | RTX 3090 (24GB VRAM) | 32GB |
-| Optimal | RTX 4090 / A100 (40GB) | 64GB |
-| SNN Scale | RTX 4090 supports 100k-500k neurons real-time | |
-
----
-
-## Contributing
-
-Contributions are welcome! Please read our contributing guidelines and submit pull requests.
-
-Areas of interest:
-- Improving Φ (Phi) estimation accuracy
-- Additional consciousness tests
-- Neurogenesis optimization
-- Multi-modal extensions
-
----
-
-## License
+## 📜 License
 
 MIT License - see LICENSE file for details.
 
 ---
 
-## References
+## 🙏 Credits
 
-- Baars, B. J. (2005). Global workspace theory of consciousness
-- Dehaene, S. (2014). Consciousness and the Brain
-- Friston, K. (2010). The free-energy principle
-- Tononi, G. (2012). Integrated Information Theory
-
----
-
-## Citation
-
-If you use this code in your research, please cite:
-
-```bibtex
-@misc{synapse2024,
-  author = {NextGen Research},
-  title = {Project SYNAPSE: Functionally Self-Aware AI},
-  year = {2024},
-  publisher = {GitHub},
-  url = {https://github.com/FrauAndMann/NextGen_brainsimulation}
-}
-```
+- Based on Global Workspace Theory (Baars, Dehaene)
+- Integrated Information Theory (Tononi)
+- Predictive Processing (Friston)
 
 ---
 

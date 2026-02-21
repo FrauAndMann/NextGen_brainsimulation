@@ -66,6 +66,16 @@ class ChatMessage(BaseModel):
     text: str
 
 
+class DataConfigRequest(BaseModel):
+    data_type: str = "synthetic"  # synthetic, images, text, rl, timeseries
+    data_path: Optional[str] = None
+    env_name: str = "CartPole-v1"  # for RL
+
+
+class DirectoryScanRequest(BaseModel):
+    path: str
+
+
 # ── Training Manager ───────────────────────────────────────────────────
 
 class TrainingManager:
@@ -905,6 +915,123 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         if websocket in manager.ws_clients:
             manager.ws_clients.remove(websocket)
+
+
+# ── Data Management Endpoints ────────────────────────────────────────────
+
+# Global data config
+data_config = {
+    "data_type": "synthetic",
+    "data_path": None,
+    "env_name": "CartPole-v1",
+    "available_types": ["synthetic", "images", "text", "rl", "timeseries"],
+    "rl_environments": ["CartPole-v1", "MountainCar-v0", "Pendulum-v1", "Acrobot-v1"]
+}
+
+
+@app.get("/api/data/config")
+async def get_data_config():
+    """Get current data configuration"""
+    return data_config
+
+
+@app.post("/api/data/config")
+async def set_data_config(req: DataConfigRequest):
+    """Set data configuration"""
+    global data_config
+    data_config["data_type"] = req.data_type
+    data_config["data_path"] = req.data_path
+    data_config["env_name"] = req.env_name
+
+    return {"status": "updated", "config": data_config}
+
+
+@app.post("/api/data/scan-directory")
+async def scan_directory(req: DirectoryScanRequest):
+    """Scan directory for usable data files"""
+    path = Path(req.path)
+
+    if not path.exists():
+        return {"error": "Directory not found", "path": req.path}
+
+    result = {
+        "path": str(path),
+        "images": {"count": 0, "files": []},
+        "text": {"count": 0, "files": []},
+        "timeseries": {"count": 0, "files": []},
+        "total_files": 0
+    }
+
+    # Scan for images
+    image_exts = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.webp'}
+    text_exts = {'.txt', '.md', '.json', '.csv', '.xml'}
+    data_exts = {'.csv', '.json'}
+
+    for f in path.rglob("*"):
+        if f.is_file():
+            result["total_files"] += 1
+            ext = f.suffix.lower()
+
+            if ext in image_exts and result["images"]["count"] < 100:
+                result["images"]["count"] += 1
+                result["images"]["files"].append(f.name)
+            elif ext in text_exts and result["text"]["count"] < 100:
+                result["text"]["count"] += 1
+                result["text"]["files"].append(f.name)
+            elif ext in data_exts and result["timeseries"]["count"] < 100:
+                result["timeseries"]["count"] += 1
+                result["timeseries"]["files"].append(f.name)
+
+    return result
+
+
+@app.get("/api/data/recommendations")
+async def get_data_recommendations():
+    """Get recommendations for creating datasets"""
+    return {
+        "images": {
+            "description": "Папка с изображениями для визуального обучения",
+            "structure": "folder/*.jpg или folder/subfolders/*.png",
+            "min_files": 100,
+            "recommended": 10000,
+            "example": "D:\\Photos\\vacation\\*.jpg"
+        },
+        "text": {
+            "description": "Текстовые файлы для языкового обучения",
+            "structure": "folder/*.txt или folder/*.md",
+            "min_files": 10,
+            "recommended": 100,
+            "example": "D:\\Books\\*.txt"
+        },
+        "rl": {
+            "description": "OpenAI Gym окружения для обучения агентности",
+            "environments": ["CartPole-v1", "MountainCar-v0", "Pendulum-v1"],
+            "requirements": "pip install gymnasium"
+        },
+        "timeseries": {
+            "description": "CSV файлы с временными рядами",
+            "structure": "folder/*.csv с числовыми колонками",
+            "min_files": 1,
+            "recommended": 10,
+            "example": "D:\\Data\\sensors\\*.csv"
+        }
+    }
+
+
+@app.get("/api/system/info")
+async def get_system_info():
+    """Get system information"""
+    import platform
+
+    return {
+        "platform": platform.system(),
+        "python_version": platform.python_version(),
+        "cuda_available": torch.cuda.is_available(),
+        "cuda_version": torch.version.cuda if torch.cuda.is_available() else None,
+        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+        "gpu_memory": f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB" if torch.cuda.is_available() else None,
+        "model_params": sum(p.numel() for p in manager.model.parameters())
+    }
 
 
 # ── Run ───────────────────────────────────────────────────────────────
