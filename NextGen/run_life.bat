@@ -8,7 +8,7 @@ echo.
 
 REM Check venv
 if not exist "venv\Scripts\activate.bat" (
-    echo ERROR: Run setup.bat first!
+    echo ERROR: Run setup_gpu.bat first!
     pause
     exit /b 1
 )
@@ -20,6 +20,7 @@ echo.
 echo Starting SYNAPSE...
 echo.
 echo    - Continuous learning: ON
+echo    - Auto-resume: ON (loads last checkpoint)
 echo    - Dashboard: http://localhost:8000
 echo    - Auto-save: Every 5 minutes
 echo.
@@ -41,12 +42,12 @@ start "" "dashboard\index.html"
 
 timeout /t 2 /nobreak >nul
 
-REM Start training
-echo Starting continuous learning...
+REM Start training with auto-resume
+echo Starting continuous learning (auto-resume enabled)...
 echo.
 
 cd files
-python train_continuous.py --save-interval 300 --keep-checkpoints 10
+python train_continuous.py --auto-resume --save-interval 300 --keep-checkpoints 10
 cd ..
 
 echo.

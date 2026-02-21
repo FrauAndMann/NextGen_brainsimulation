@@ -46,6 +46,8 @@ def parse_args():
     # Resume
     parser.add_argument("--resume", type=str, default=None,
                        help="Path to checkpoint to resume from")
+    parser.add_argument("--auto-resume", action="store_true",
+                       help="Automatically find and load the latest checkpoint")
 
     # Stop conditions (optional)
     parser.add_argument("--steps", type=int, default=None,
@@ -73,6 +75,15 @@ def parse_args():
     parser.add_argument("--config", type=str, default="default",
                        choices=["fast", "default", "full"],
                        help="Configuration preset")
+
+    # Data source
+    parser.add_argument("--data-type", type=str, default="synthetic",
+                       choices=["synthetic", "images", "text", "rl", "timeseries"],
+                       help="Type of data to train on")
+    parser.add_argument("--data-path", type=str, default=None,
+                       help="Path to data (for images/text/timeseries)")
+    parser.add_argument("--env-name", type=str, default="CartPole-v1",
+                       help="RL environment name (for --data-type rl)")
 
     return parser.parse_args()
 
@@ -176,6 +187,20 @@ def main():
             print(f"ERROR: Checkpoint not found: {args.resume}")
             sys.exit(1)
 
+    # Auto-resume: find latest checkpoint
+    elif args.auto_resume:
+        checkpoint_dir = Path(config.checkpoint_dir)
+        if checkpoint_dir.exists():
+            checkpoints = sorted(checkpoint_dir.glob("continuous_*.pt"), key=lambda x: x.stat().st_mtime, reverse=True)
+            if checkpoints:
+                latest = checkpoints[0]
+                print(f"Auto-resuming from: {latest.name}")
+                trainer.load_checkpoint(str(latest))
+            else:
+                print("No checkpoints found. Starting fresh.")
+        else:
+            print("No checkpoints directory. Starting fresh.")
+
     # Create controller
     controller = TrainingController(args, trainer)
 
@@ -183,18 +208,48 @@ def main():
     shared_metrics = get_shared_metrics()
     shared_metrics.set_state("running")
 
-    # Data stream - using memory-efficient lazy dataset
-    print("Creating data stream (memory-efficient mode)...")
-    dataset = BufferedLazyDataset(
-        seq_length=config.seq_len,
-        buffer_size=100  # Small buffer (~7MB), generates on-demand
-    )
-    loader = DataLoader(
-        dataset,
-        batch_size=config.batch_size,
-        num_workers=0,  # Single worker to avoid memory duplication
-        pin_memory=config.pin_memory if torch.cuda.is_available() else False
-    )
+    # Data stream - select based on data-type
+    print(f"Creating data stream (type: {args.data_type})...")
+
+    if args.data_type == "synthetic":
+        dataset = BufferedLazyDataset(
+            seq_length=config.seq_len,
+            buffer_size=100
+        )
+        loader = DataLoader(
+            dataset,
+            batch_size=config.batch_size,
+            num_workers=0,
+            pin_memory=config.pin_memory if torch.cuda.is_available() else False
+        )
+    else:
+        # Real data
+        from real_data import create_data_loader
+        data_loader = create_data_loader(
+            data_type=args.data_type,
+            data_path=args.data_path,
+            obs_dim=config.obs_dim,
+            seq_len=config.seq_len,
+            env_name=args.env_name
+        )
+
+        # Wrap as iterable dataset
+        class RealDataIterable(torch.utils.data.IterableDataset):
+            def __init__(self, loader):
+                self.loader = loader
+
+            def __iter__(self):
+                while True:
+                    obs, actions = self.loader.generate_trajectory()
+                    yield obs, actions
+
+        dataset = RealDataIterable(data_loader)
+        loader = DataLoader(
+            dataset,
+            batch_size=config.batch_size,
+            num_workers=0,
+            pin_memory=config.pin_memory if torch.cuda.is_available() else False
+        )
 
     print()
     print("=" * 60)
