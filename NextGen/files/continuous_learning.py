@@ -38,7 +38,7 @@ class GrowthConfig:
     keep_last_n_checkpoints: int = 5
 
     # Continuous learning
-    sample_buffer_size: int = 10000  # Experience replay buffer
+    sample_buffer_size: int = 1000  # Experience replay buffer (reduced for memory efficiency)
     replay_ratio: float = 0.2  # 20% of batch from replay
 
 
@@ -259,13 +259,15 @@ class ContinuousTrainer:
             self.save_checkpoint(reason="auto")
             self.last_save_time = current_time
 
-        # Record metrics
+        # Record metrics (keep only last 1000 to prevent memory leak)
         self.metrics_history.append({
             'step': self.step_count,
             'timestamp': datetime.now().isoformat(),
             **metrics,
             **losses
         })
+        if len(self.metrics_history) > 1000:
+            self.metrics_history = self.metrics_history[-1000:]
 
         self.step_count += 1
         self.total_samples_seen += observation.shape[0]
@@ -286,10 +288,12 @@ class ContinuousTrainer:
             )
             losses['world_loss'] = world_loss.item()
 
-            # Record for growth detection
+            # Record for growth detection (keep last 500 to prevent memory leak)
             if 'world' not in self.layer_errors:
                 self.layer_errors['world'] = []
             self.layer_errors['world'].append(world_loss.item())
+            if len(self.layer_errors['world']) > 500:
+                self.layer_errors['world'] = self.layer_errors['world'][-500:]
 
         # Self model loss
         if len(self.model.history_buffer) >= 2:
@@ -450,7 +454,7 @@ def run_continuous_training(model,
         # Stop after condition
         run_continuous_training(model, config, stop_condition=lambda: model.step_count > 100000)
     """
-    from environment import SyntheticEnvironmentDataset
+    from environment import BufferedLazyDataset
     from torch.utils.data import DataLoader
 
     growth_config = growth_config or GrowthConfig()
@@ -459,13 +463,13 @@ def run_continuous_training(model,
     if resume_from:
         trainer.load_checkpoint(resume_from)
 
-    # Create data stream
-    print("Creating data stream...")
-    dataset = SyntheticEnvironmentDataset(
-        num_samples=100000,  # Will be refilled
-        seq_length=config.seq_len
+    # Create data stream - memory-efficient lazy dataset
+    print("Creating data stream (memory-efficient mode)...")
+    dataset = BufferedLazyDataset(
+        seq_length=config.seq_len,
+        buffer_size=100  # Small buffer, generates on-demand
     )
-    loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True)
+    loader = DataLoader(dataset, batch_size=config.batch_size, num_workers=0)
 
     print("=" * 60)
     print("CONTINUOUS TRAINING STARTED")
@@ -487,18 +491,8 @@ def run_continuous_training(model,
                 print("\nStop condition met.")
                 break
 
-            # Get next batch (refill if exhausted)
-            try:
-                observations, actions = next(data_iter)
-            except StopIteration:
-                # Refill data
-                dataset = SyntheticEnvironmentDataset(
-                    num_samples=100000,
-                    seq_length=config.seq_len
-                )
-                loader = DataLoader(dataset, batch_size=config.batch_size, shuffle=True)
-                data_iter = iter(loader)
-                observations, actions = next(data_iter)
+            # Get next batch (lazy dataset generates on-demand)
+            observations, actions = next(data_iter)
 
             observations = observations.to(config.device)
             actions = actions.to(config.device)

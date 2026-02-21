@@ -34,7 +34,7 @@ from continuous_learning import (
     ContinuousTrainer,
     run_continuous_training
 )
-from environment import SyntheticEnvironmentDataset
+from environment import LazySyntheticDataset, BufferedLazyDataset
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -178,18 +178,17 @@ def main():
     # Create controller
     controller = TrainingController(args, trainer)
 
-    # Data stream
-    print("Creating data stream...")
-    dataset = SyntheticEnvironmentDataset(
-        num_samples=50000,
-        seq_length=config.seq_len
+    # Data stream - using memory-efficient lazy dataset
+    print("Creating data stream (memory-efficient mode)...")
+    dataset = BufferedLazyDataset(
+        seq_length=config.seq_len,
+        buffer_size=100  # Small buffer (~7MB), generates on-demand
     )
     loader = DataLoader(
         dataset,
         batch_size=config.batch_size,
-        shuffle=True,
-        num_workers=0,
-        pin_memory=config.pin_memory
+        num_workers=0,  # Single worker to avoid memory duplication
+        pin_memory=config.pin_memory if torch.cuda.is_available() else False
     )
 
     print()
@@ -220,23 +219,8 @@ def main():
     try:
         with tqdm(desc="Training", unit="batch", ncols=100) as pbar:
             while not controller.should_stop():
-                # Get next batch
-                try:
-                    observations, actions = next(data_iter)
-                except StopIteration:
-                    # Refill data
-                    dataset = SyntheticEnvironmentDataset(
-                        num_samples=50000,
-                        seq_length=config.seq_len
-                    )
-                    loader = DataLoader(
-                        dataset,
-                        batch_size=config.batch_size,
-                        shuffle=True,
-                        num_workers=0
-                    )
-                    data_iter = iter(loader)
-                    observations, actions = next(data_iter)
+                # Get next batch (lazy dataset generates on-demand, no StopIteration)
+                observations, actions = next(data_iter)
 
                 observations = observations.to(config.device)
                 actions = actions.to(config.device)

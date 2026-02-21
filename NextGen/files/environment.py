@@ -325,67 +325,200 @@ class SyntheticEnvironment:
 
 class SyntheticEnvironmentDataset(torch.utils.data.Dataset):
     """
-    Dataset of trajectories from synthetic environment
+    Dataset of trajectories from synthetic environment (memory-limited)
+
+    WARNING: For large num_samples, use LazySyntheticDataset instead
+    to avoid OOM issues.
     """
-    
-    def __init__(self, 
+
+    def __init__(self,
                  num_samples: int,
                  seq_length: int,
                  config: Optional[EnvironmentConfig] = None):
-        
+
         self.num_samples = num_samples
         self.seq_length = seq_length
-        
+
         if config is None:
             config = EnvironmentConfig()
-        
+
         self.env = SyntheticEnvironment(config)
-        
+
         # Pre-generate data
         print(f"Generating {num_samples} trajectories...")
         self.trajectories = []
-        
+
         for i in range(num_samples):
             if i % 1000 == 0:
                 print(f"Generated {i}/{num_samples}")
-            
+
             trajectory = self._generate_trajectory()
             self.trajectories.append(trajectory)
-    
+
     def _generate_trajectory(self) -> Dict[str, torch.Tensor]:
         """
         Generate one trajectory
         """
         observations = []
         actions = []
-        
+
         obs = self.env.reset()
         observations.append(obs)
-        
+
         for t in range(self.seq_length):
             # Random action
             action = torch.randn(self.env.config.action_dim)
-            
+
             # Step
             next_obs, _, _, _ = self.env.step(action)
-            
+
             observations.append(next_obs)
             actions.append(action)
-        
+
         observations = torch.stack(observations[:-1])  # Exclude last
         actions = torch.stack(actions)
-        
+
         return {
             'observations': observations,
             'actions': actions
         }
-    
+
     def __len__(self):
         return self.num_samples
-    
+
     def __getitem__(self, idx):
         traj = self.trajectories[idx]
         return traj['observations'], traj['actions']
+
+
+class LazySyntheticDataset(torch.utils.data.IterableDataset):
+    """
+    Memory-efficient streaming dataset - generates trajectories on-the-fly.
+
+    This solves OOM issues by never storing all data in memory.
+    Generates infinite stream of trajectories for continuous training.
+
+    Usage:
+        dataset = LazySyntheticDataset(seq_length=32)
+        loader = DataLoader(dataset, batch_size=32)
+        for observations, actions in loader:
+            # Process batch - data generated on demand
+    """
+
+    def __init__(self,
+                 seq_length: int,
+                 config: Optional[EnvironmentConfig] = None,
+                 prefetch_trajectories: int = 10):
+        """
+        Args:
+            seq_length: Length of each trajectory
+            config: Environment configuration
+            prefetch_trajectories: Number of trajectories to prefetch (small buffer)
+        """
+        self.seq_length = seq_length
+        self.config = config or EnvironmentConfig()
+        self.prefetch_count = prefetch_trajectories
+
+        # Thread-local storage for workers
+        self._env = None
+
+    def _get_env(self) -> SyntheticEnvironment:
+        """Get or create environment (one per worker)"""
+        if self._env is None:
+            self._env = SyntheticEnvironment(self.config)
+        return self._env
+
+    def _generate_trajectory(self, env: SyntheticEnvironment) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Generate one trajectory on-the-fly
+        """
+        observations = []
+        actions = []
+
+        obs = env.reset()
+        observations.append(obs)
+
+        for t in range(self.seq_length):
+            action = torch.randn(env.config.action_dim)
+            next_obs, _, _, _ = env.step(action)
+
+            observations.append(next_obs)
+            actions.append(action)
+
+        observations = torch.stack(observations[:-1])
+        actions = torch.stack(actions)
+
+        return observations, actions
+
+    def __iter__(self):
+        """Infinite iterator - generates data on demand"""
+        env = self._get_env()
+
+        while True:
+            yield self._generate_trajectory(env)
+
+
+class BufferedLazyDataset(torch.utils.data.IterableDataset):
+    """
+    Buffered version of LazySyntheticDataset with small prefetch buffer.
+
+    Balances memory efficiency with training speed by maintaining
+    a small buffer of pre-generated trajectories.
+    """
+
+    def __init__(self,
+                 seq_length: int,
+                 config: Optional[EnvironmentConfig] = None,
+                 buffer_size: int = 100):
+        """
+        Args:
+            seq_length: Length of each trajectory
+            config: Environment configuration
+            buffer_size: Number of trajectories in buffer (default: 100 = ~7MB)
+        """
+        self.seq_length = seq_length
+        self.config = config or EnvironmentConfig()
+        self.buffer_size = buffer_size
+
+        self._env = None
+        self._buffer = []
+        self._buffer_idx = 0
+
+    def _get_env(self) -> SyntheticEnvironment:
+        if self._env is None:
+            self._env = SyntheticEnvironment(self.config)
+        return self._env
+
+    def _generate_trajectory(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        env = self._get_env()
+        observations = []
+        actions = []
+
+        obs = env.reset()
+        observations.append(obs)
+
+        for t in range(self.seq_length):
+            action = torch.randn(env.config.action_dim)
+            next_obs, _, _, _ = env.step(action)
+            observations.append(next_obs)
+            actions.append(action)
+
+        return torch.stack(observations[:-1]), torch.stack(actions)
+
+    def _refill_buffer(self):
+        """Refill buffer when empty"""
+        self._buffer = []
+        for _ in range(self.buffer_size):
+            self._buffer.append(self._generate_trajectory())
+        self._buffer_idx = 0
+
+    def __iter__(self):
+        while True:
+            if self._buffer_idx >= len(self._buffer):
+                self._refill_buffer()
+
+            yield self._buffer[self._buffer_idx]
+            self._buffer_idx += 1
 
 
 # ============ Utility Functions ============
